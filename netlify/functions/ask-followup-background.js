@@ -1,6 +1,4 @@
-// netlify/functions/ask-followup-background.js
 import { Groq } from "groq-sdk";
-
 const groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
 
 export const handler = async (event) => {
@@ -14,7 +12,6 @@ export const handler = async (event) => {
     }
     if (!process.env.GROQ_API_KEY) {
       console.error("BG_NO_GROQ_KEY");
-      // נחזיר משהו כדי שלא תישאר “חושב”
       await editOriginal(application_id, token, "חסר GROQ_API_KEY ב-Netlify.");
       return res(200, "ok");
     }
@@ -35,7 +32,6 @@ export const handler = async (event) => {
     return res(200, "ok");
   } catch (e) {
     console.error("BG_ERR", e);
-    // לא מפילים את נטליפיי, וגם לא משאירים “חושב”
     try {
       const { application_id, token } = JSON.parse(event.body || "{}");
       if (application_id && token) {
