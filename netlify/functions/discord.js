@@ -161,19 +161,23 @@ export const handler = async (event) => {
     const payload = JSON.parse(event.isBase64Encoded ? Buffer.from(event.body, "base64").toString("utf8") : event.body);
 
     // Ping
+    // שים מיד אחרי יצירת payload
+if (payload?.type === 1) return json({ type: 1 });
+
 // /ask — שולח defer ואז עונה בפולואפ
 if (payload?.type === 2 && payload?.data?.name === "ask") {
   if (!GROQ_KEY) {
     return json({ type: 4, data: { content: "חסר GROQ_API_KEY ב-Netlify." } });
   }
+
   const prompt = payload.data.options?.find(o => o.name === "prompt")?.value || "";
 
-  // שלב ראשון: מחזיר defer כדי שדיסקורד יראה "is thinking..."
+  // החזרה המיידית: מפעיל "is thinking..."
   setTimeout(async () => {
     let answer = await askGroq(prompt);
     answer = sanitize(answer);
 
-    // שלח followup ל־Discord
+    // follow-up ל־Discord (לא חוסם את ההחזרה המיידית)
     await fetch(`https://discord.com/api/v10/webhooks/${payload.application_id}/${payload.token}`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -185,10 +189,6 @@ if (payload?.type === 2 && payload?.data?.name === "ask") {
 }
 
 
-return json({ type: 5 }); // defer reply
-
-    }
-
     // פקודה לא מוכרת
     return json({ type: 4, data: { content: "לא יודע מה רצית. תן /ask ומשהו קונקרטי." } });
   } catch (e) {
@@ -196,6 +196,7 @@ return json({ type: 5 }); // defer reply
     return json({ type: 4, data: { content: "קרסתי קלות. עוד ניסיון." } });
   }
 };
+
 
 
 
