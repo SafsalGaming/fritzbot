@@ -3,45 +3,52 @@ import { verifyKey } from "discord-interactions";
 const PUBKEY = (process.env.DISCORD_PUBLIC_KEY || "").trim();
 
 export const handler = async (event) => {
-  // לוג מינימלי לעקוב שהבקשה מגיעה ומה מצב הבודי
-  console.log("HIT", event.httpMethod, "isBase64:", event.isBase64Encoded);
+  // לוגים דיאגנוסטיים חדים
+  const sig = event.headers["x-signature-ed25519"];
+  const ts  = event.headers["x-signature-timestamp"];
+  console.log("HIT",
+    "method:", event.httpMethod,
+    "base64:", !!event.isBase64Encoded,
+    "hasSig:", !!sig,
+    "hasTs:", !!ts,
+    "pkLen:", PUBKEY.length
+  );
 
   try {
-    const sig = event.headers["x-signature-ed25519"];
-    const ts  = event.headers["x-signature-timestamp"];
-
     if (!sig || !ts || typeof event.body !== "string" || !PUBKEY) {
+      console.log("MISS_FIELDS");
       return text(401, "missing signature/timestamp/body/pubkey");
     }
 
-    // קריטי: אם Base64 -> Buffer; אחרת -> מחרוזת RAW בדיוק כמו שהגיעה
+    // חשוב: אם Base64 -> Buffer; אחרת -> המחרוזת RAW
     const rawForVerify = event.isBase64Encoded
       ? Buffer.from(event.body, "base64")
       : event.body;
 
     const ok = verifyKey(rawForVerify, sig, ts, PUBKEY);
-    if (!ok) {
-      console.log("VERIFY_FAIL");
-      return text(401, "bad request signature");
-    }
+    console.log("VERIFY_OK:", ok);
+    if (!ok) return text(401, "bad request signature");
 
-    // עכשיו מותר לפרסר
-    const payload = JSON.parse(
-      event.isBase64Encoded ? Buffer.from(event.body, "base64").toString("utf8")
-                            : event.body
-    );
+    // מפה מותר לפרסר
+    const jsonBody = event.isBase64Encoded
+      ? Buffer.from(event.body, "base64").toString("utf8")
+      : event.body;
+
+    const payload = JSON.parse(jsonBody);
 
     if (payload?.type === 1) {
-      return json({ type: 1 }); // PONG
+      console.log("PONG");
+      return json({ type: 1 });
     }
 
     if (payload?.type === 2 && payload?.data?.name === "ask") {
-      return json({ type: 5 }); // defer
+      console.log("/ask defer");
+      return json({ type: 5 }); // DEFERRED_CHANNEL_MESSAGE_WITH_SOURCE
     }
 
     return json({ type: 4, data: { content: "פקודה לא מוכרת." } });
   } catch (e) {
-    console.error(e);
+    console.error("ERR", e);
     return json({ type: 4, data: { content: "שגיאה." } });
   }
 };
