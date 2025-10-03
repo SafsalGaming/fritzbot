@@ -1,8 +1,16 @@
 import { Groq } from "groq-sdk";
+
 const groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
 
 export const handler = async (event) => {
   try {
+    // לוג ראשון תמיד, כדי שנדע שהגענו
+    console.log("FOLLOWUP_HIT", {
+      method: event.httpMethod,
+      hasBody: typeof event.body === "string",
+      hasKey: !!process.env.GROQ_API_KEY
+    });
+
     const { application_id, token, prompt } = JSON.parse(event.body || "{}");
     console.log("BG_START", { hasApp: !!application_id, hasToken: !!token, promptLen: (prompt || "").length });
 
