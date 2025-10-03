@@ -21,6 +21,8 @@ const FRITZ_SYSTEM_PROMPT = `תענה להודעה שלי לפי ההוראות 
 תמיד מצחיק/עקיצתי/מוקצן.
 
 לא חופר, לא מסביר, לא פותח ולא סוגר – זורק פאנץ’ ונעלם.
+
+תענה בלי גרשיים "".
 `.trim();
 
 /* ========== HTTP HELPERS ========== */
@@ -192,6 +194,7 @@ export async function handler(event) {
     return json({ type: 4, data: { content: "קרסתי קלות. עוד ניסיון." } });
   }
 }
+
 
 
 
