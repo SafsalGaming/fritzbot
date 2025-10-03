@@ -11,4 +11,3 @@
     "register-commands": "node scripts/register-commands.js"
   }
 }
-
