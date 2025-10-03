@@ -1,13 +1,10 @@
-import { Groq } from "groq-sdk";
-
+const { Groq } = require("groq-sdk");
 const groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
 
-export const handler = async (event) => {
+exports.handler = async (event) => {
   try {
     const { application_id, token, prompt } = JSON.parse(event.body || "{}");
-    if (!application_id || !token) {
-      return res(400, "missing app id or token");
-    }
+    if (!application_id || !token) return res(400, "missing app id or token");
 
     const r = await groq.chat.completions.create({
       model: "llama-3.1-70b-versatile",
@@ -30,11 +27,10 @@ export const handler = async (event) => {
     return res(200, "ok");
   } catch (e) {
     console.error("background error", e);
-    // מחזירים 200 כדי לא להפיל את נטליפיי גם אם נכשל
     return res(200, "done");
   }
 };
 
-const res = (statusCode, body) => ({
-  statusCode, headers: { "Content-Type": "text/plain" }, body
-});
+function res(statusCode, body) {
+  return { statusCode, headers: { "Content-Type": "text/plain" }, body };
+}
