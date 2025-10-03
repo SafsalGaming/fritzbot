@@ -6,6 +6,7 @@
   from = "/interactions"
   to = "/.netlify/functions/discord"
   status = 200
+  force = true   # הטריק שדואג שגם POST/HEAD יעברו תמיד לפונקציה
 
 [build.environment]
   NODE_VERSION = "20"
