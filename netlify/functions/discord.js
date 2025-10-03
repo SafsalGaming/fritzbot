@@ -173,11 +173,12 @@ if (isSelfFollowup) {
     let answer = await askGroq(prompt);
     answer = sanitize(answer);
 
-    const res = await fetch(`https://discord.com/api/v10/webhooks/${application_id}/${token}`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ content: answer }),
-    });
+await fetch(`https://discord.com/api/v10/webhooks/${application_id}/${token}/messages/@original`, {
+  method: "PATCH",
+  headers: { "Content-Type": "application/json" },
+  body: JSON.stringify({ content: answer }),
+});
+
 
     if (!res.ok) {
       const txt = await res.text().catch(() => "");
@@ -269,6 +270,7 @@ if (payload?.type === 2 && payload?.data?.name === "ask") {
     return json({ type: 4, data: { content: "קרסתי קלות. עוד ניסיון." } });
   }
 };
+
 
 
 
