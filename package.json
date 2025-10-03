@@ -4,7 +4,7 @@
   "type": "module",
   "version": "1.0.0",
   "dependencies": {
-    "@discord-interactions/verify-node": "^1.0.2",
     "groq-sdk": "^0.5.0"
   }
 }
+
