@@ -1,11 +1,10 @@
 // scripts/register-commands.js
-// רושם את כל הפקודות (overwrite). אם יש GUILD_ID ירשום גם לגילד (מיידי) וגם גלובלי (איטי יותר).
 
 const APP_ID   = process.env.DISCORD_APP_ID || process.env.APP_ID;
-const GUILD_ID = process.env.DISCORD_GUILD_ID; // אופציונלי
-const BOT_TOKEN = process.env.DISCORD_BOT_TOKEN || process.env.DISCORD_TOKEN; // אם בא לך בוט רק לרישום
-const CID = process.env.DISCORD_CLIENT_ID;       // לחלופה בלי בוט
-const CSEC = process.env.DISCORD_CLIENT_SECRET;  // לחלופה בלי בוט
+const GUILD_ID = process.env.DISCORD_GUILD_ID;
+const BOT_TOKEN = process.env.DISCORD_BOT_TOKEN;
+const CID = process.env.DISCORD_CLIENT_ID;
+const CSEC = process.env.DISCORD_CLIENT_SECRET;
 
 if (!APP_ID) {
   console.error("Missing DISCORD_APP_ID");
@@ -17,9 +16,8 @@ const commands = [
     name: "ask",
     description: "שאל את ה-AI",
     type: 1,
-    // User-install
     integration_types: [1],
-    contexts: [2], // DM/פרייבט; אם תרצה גם בשרתים: הוסף 0 בשניהם
+    contexts: [2],
     options: [
       { name: "prompt", description: "מה לשאול?", type: 3, required: true }
     ]
@@ -27,10 +25,8 @@ const commands = [
 ];
 
 async function getAuthHeader() {
-  // A) הכי פשוט: Bot Token (לא צריך שהבוט יהיה מחובר לגייטווי)
   if (BOT_TOKEN) return `Bot ${BOT_TOKEN}`;
 
-  // B) בלי בוט: OAuth2 Client Credentials עם scope applications.commands.update
   if (CID && CSEC) {
     const body = new URLSearchParams({
       grant_type: "client_credentials",
@@ -57,8 +53,7 @@ async function put(url, auth) {
     method: "PUT",
     headers: {
       "Authorization": auth,
-      "Content-Type": "application/json",
-      "X-RateLimit-Precision": "millisecond"
+      "Content-Type": "application/json"
     },
     body: JSON.stringify(commands)
   });
@@ -70,14 +65,12 @@ async function put(url, auth) {
 (async () => {
   const auth = await getAuthHeader();
 
-  // לרענון מיידי בזמן פיתוח — גילד (אם סיפקת GUILD_ID)
   if (GUILD_ID) {
     await put(`https://discord.com/api/v10/applications/${APP_ID}/guilds/${GUILD_ID}/commands`, auth);
   }
-  // גלובלי — מוחק הכל ומעלה רק את מה שב-commands
+
   await put(`https://discord.com/api/v10/applications/${APP_ID}/commands`, auth);
 })().catch(err => {
   console.error("register-commands error:", err.message);
-  // לא מפיל את הדיפלוי — רק מדפיס שגיאה
   process.exit(0);
 });
