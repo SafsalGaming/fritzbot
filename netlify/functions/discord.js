@@ -4,7 +4,6 @@
 
 import { verifyKey } from "discord-interactions";
 import { Groq } from "groq-sdk";
-import { fetch } from "undici"; // מבטיח fetch זמין גם בסביבות בלי global fetch
 
 /* ========== ENV ========== */
 const DISCORD_PUBLIC_KEY = (process.env.DISCORD_PUBLIC_KEY || "").trim();
@@ -182,3 +181,4 @@ export async function handler(event) {
     return json({ type: 4, data: { content: "קרסתי קלות. עוד ניסיון." } });
   }
 }
+
