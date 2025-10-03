@@ -1,89 +1,53 @@
 // netlify/functions/discord.js
 import { verifyKey } from "@discord-interactions/verify-node";
-import { Groq } from "groq-sdk";
 
-const groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
+const PUBKEY = (process.env.DISCORD_PUBLIC_KEY || "").trim();
 
-export default async (event) => {
+export const handler = async (event) => {
   try {
-    // קבל את הגוף הגולמי כמו שהוא (Discord חותם על המחרוזת המקורית)
+    // קבל את הגוף הגולמי בדיוק כפי שהגיע לדיסקורד
     const signature = event.headers["x-signature-ed25519"];
     const timestamp = event.headers["x-signature-timestamp"];
-    const body = event.body || ""; // string
-
-    const isValid = verifyKey(
-      Buffer.from(body),
-      signature,
-      timestamp,
-      process.env.DISCORD_PUBLIC_KEY
-    );
-
-    if (!isValid) {
-      return { statusCode: 401, body: "bad request signature" };
+    if (!signature || !timestamp || !event.body || !PUBKEY) {
+      return resp(401, "missing signature/timestamp/body/pubkey");
     }
 
-    const payload = JSON.parse(body);
+    // Netlify לפעמים שולח Base64
+    const rawBody = event.isBase64Encoded
+      ? Buffer.from(event.body, "base64")
+      : Buffer.from(event.body);
 
-    // Ping
+    // חשוב: אימות על הגוף הגולמי, לפני JSON.parse
+    const ok = verifyKey(rawBody, signature, timestamp, PUBKEY);
+    if (!ok) return resp(401, "bad request signature");
+
+    const payload = JSON.parse(rawBody.toString("utf8"));
+
+    // PING = 1  -> להחזיר PONG מיד
     if (payload?.type === 1) {
       return json({ type: 1 });
     }
 
-    // Slash: /ask
+    // Slash command בסיסי לדוגמה (תוכל להשאיר ככה ואז לשלב Groq אחרי שיאומת):
     if (payload?.type === 2 && payload?.data?.name === "ask") {
-      // חייבים לענות תוך 3 שניות: שולחים defer
-      queueFollowup(payload); // לא מחכים לזה
+      // defer כדי לא לחכות
       return json({ type: 5 }); // DEFERRED_CHANNEL_MESSAGE_WITH_SOURCE
     }
 
     return json({ type: 4, data: { content: "פקודה לא מוכרת." } });
-  } catch (err) {
-    console.error(err);
-    // אם כבר לא נוכל לענות בפורמט Discord, נחזיר 200 עם שגיאה
-    return json({ type: 4, data: { content: "שגיאה בבקשה." } });
+  } catch (e) {
+    console.error(e);
+    return json({ type: 4, data: { content: "שגיאה." } });
   }
 };
-
-// שליחת התשובה האמיתית ב-follow-up webhook (אחרי ה-defer)
-async function queueFollowup(payload) {
-  try {
-    const prompt =
-      payload.data.options?.find((o) => o.name === "prompt")?.value || "";
-
-    const completion = await groqChat(prompt);
-
-    const followupUrl = `https://discord.com/api/v10/webhooks/${payload.application_id}/${payload.token}`;
-    await fetch(followupUrl, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        content: completion || "אין תשובה.",
-        flags: 0 // פומבי; אם תרצה ephemeral שים 64
-      })
-    });
-  } catch (e) {
-    console.error("followup failed:", e);
-  }
-}
-
-async function groqChat(userQuestion) {
-  const completion = await new Groq({ apiKey: process.env.GROQ_API_KEY })
-    .chat.completions.create({
-      model: "llama-3.1-70b-versatile",
-      messages: [
-        { role: "system", content: "ענה בעברית, קצר וברור." },
-        { role: "user", content: userQuestion }
-      ],
-      temperature: 0.4
-    });
-
-  return completion.choices?.[0]?.message?.content?.trim();
-}
 
 function json(obj) {
   return {
     statusCode: 200,
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(obj)
+    body: JSON.stringify(obj),
   };
+}
+function resp(code, text) {
+  return { statusCode: code, headers: { "Content-Type": "text/plain" }, body: text };
 }
