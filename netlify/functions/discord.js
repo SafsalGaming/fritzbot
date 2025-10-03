@@ -24,7 +24,8 @@ export const handler = async (event) => {
 
       const proto = (event.headers["x-forwarded-proto"] || "https").split(",")[0].trim();
       const host  = (event.headers["x-forwarded-host"]  || event.headers["host"] || "").split(",")[0].trim();
-      const bgUrl = `${proto}://${host}/.netlify/functions/ask-followup-background`;
+      const bgUrl = `${proto}://${host}/.netlify/functions/ask-followup`;
+
 
       console.log("CALL_BG", { bgUrl, hasToken: !!payload.token, hasAppId: !!payload.application_id, promptLen: prompt.length });
 
@@ -46,3 +47,4 @@ export const handler = async (event) => {
 
 const json = (obj) => ({ statusCode: 200, headers: { "Content-Type": "application/json" }, body: JSON.stringify(obj) });
 const text = (code, body) => ({ statusCode: code, headers: { "Content-Type": "text/plain" }, body });
+
