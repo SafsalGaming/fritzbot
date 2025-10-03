@@ -1,3 +1,5 @@
+# netlify.toml – גרסה מינימלית ונקייה
+
 [functions]
   node_bundler = "esbuild"
   directory = "netlify/functions"
