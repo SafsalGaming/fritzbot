@@ -1,4 +1,3 @@
-// netlify/functions/discord.js
 import { verifyKey } from "discord-interactions";
 
 const PUBKEY = (process.env.DISCORD_PUBLIC_KEY || "").trim();
@@ -15,23 +14,20 @@ export const handler = async (event) => {
     const ok = await verifyKey(rawForVerify, sig, ts, PUBKEY);
     if (!ok) return text(401, "bad request signature");
 
-    const jsonBody = event.isBase64Encoded ? Buffer.from(event.body, "base64").toString("utf8") : event.body;
-    const payload = JSON.parse(jsonBody);
+    const body = event.isBase64Encoded ? Buffer.from(event.body, "base64").toString("utf8") : event.body;
+    const payload = JSON.parse(body);
 
     if (payload?.type === 1) return json({ type: 1 });
 
     if (payload?.type === 2 && payload?.data?.name === "ask") {
       const prompt = payload.data.options?.find(o => o.name === "prompt")?.value || "";
 
-      // בונה base URL מהבקשה עצמה (לא תלוי ב-process.env.URL)
       const proto = (event.headers["x-forwarded-proto"] || "https").split(",")[0].trim();
       const host  = (event.headers["x-forwarded-host"]  || event.headers["host"] || "").split(",")[0].trim();
       const bgUrl = `${proto}://${host}/.netlify/functions/ask-followup-background`;
 
-      // לוג דיאגנוסטי
       console.log("CALL_BG", { bgUrl, hasToken: !!payload.token, hasAppId: !!payload.application_id, promptLen: prompt.length });
 
-      // non-blocking
       fetch(bgUrl, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
