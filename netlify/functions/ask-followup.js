@@ -1,11 +1,10 @@
-// פונקציה רגילה (לא background) שמביאה תשובה מ-Groq ומעדכנת את ההודעה
+// netlify/functions/ask-followup.js
 import { Groq } from "groq-sdk";
 
 const groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
 
 export const handler = async (event) => {
   try {
-    // לוג ראשון — שנדע שהגענו
     console.log("FOLLOWUP_HIT", {
       method: event.httpMethod,
       hasBody: typeof event.body === "string",
@@ -66,4 +65,8 @@ async function editOriginal(appId, token, content) {
   return true;
 }
 
-const res = (statusCode, body) => ({ statusCode, headers: { "Content-Type": "text/plain" }, body });
+const res = (statusCode, body) => ({
+  statusCode,
+  headers: { "Content-Type": "text/plain" },
+  body
+});
