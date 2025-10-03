@@ -10,6 +10,7 @@ const PUBKEY   = (process.env.DISCORD_PUBLIC_KEY || "").trim();
 const GROQ_KEY = (process.env.GROQ_API_KEY || "").trim();
 // Optional: force a single model (otherwise we try a fallback list)
 const GROQ_MODEL = (process.env.GROQ_MODEL || "").trim();
+const FU_SECRET = (process.env.FOLLOWUP_SECRET || "").trim();
 
 // ===== Fritz Persona (as SYSTEM prompt) =====
 // מבוסס על הפרופיל שסיפקת, עם התאמות בטיחותיות (בלי שנאה/הסתה/קללות קשות).
@@ -147,11 +148,35 @@ async function askGroq(prompt) {
 // ===== Interaction Handler =====
 export const handler = async (event) => {
   try {
+    // ---- (A) self-followup mode: דילוג על אימות חתימה ----
+    const isSelfFollowup = event.httpMethod === "POST"
+      && event.headers?.["x-fu-key"] === FU_SECRET;
+
+    if (isSelfFollowup) {
+      const { application_id, token, prompt } = JSON.parse(event.body || "{}");
+      if (!application_id || !token || !prompt) {
+        return json({ ok: false, error: "missing fields" });
+      }
+
+      let answer = await askGroq(prompt);
+      answer = sanitize(answer);
+
+      await fetch(`https://discord.com/api/v10/webhooks/${application_id}/${token}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ content: answer }),
+      });
+
+      return json({ ok: true });
+    }
+
+    // ---- (B) Discord verify signature כרגיל ----
     const sig = event.headers["x-signature-ed25519"];
     const ts  = event.headers["x-signature-timestamp"];
     if (!sig || !ts || typeof event.body !== "string" || !PUBKEY) {
       return text(401, "missing signature/timestamp/body/pubkey");
     }
+
 
     // אימות חתימה — חשוב לעבוד על הגוף המקורי
     const raw = event.isBase64Encoded ? Buffer.from(event.body, "base64") : event.body;
@@ -165,6 +190,7 @@ export const handler = async (event) => {
 if (payload?.type === 1) return json({ type: 1 });
 
 // /ask — שולח defer ואז עונה בפולואפ
+// /ask — defer ואז self-invoke לאותו endpoint (עם סוד), בלי לחכות
 if (payload?.type === 2 && payload?.data?.name === "ask") {
   if (!GROQ_KEY) {
     return json({ type: 4, data: { content: "חסר GROQ_API_KEY ב-Netlify." } });
@@ -172,21 +198,27 @@ if (payload?.type === 2 && payload?.data?.name === "ask") {
 
   const prompt = payload.data.options?.find(o => o.name === "prompt")?.value || "";
 
-  // החזרה המיידית: מפעיל "is thinking..."
-  setTimeout(async () => {
-    let answer = await askGroq(prompt);
-    answer = sanitize(answer);
+  // בונים את בסיס האתר (נטפליי בד"כ מגדיר URL אוטומטית בפרוד)
+  const siteBase = process.env.URL || "https://fritz-ask-ido.netlify.app";
 
-    // follow-up ל־Discord (לא חוסם את ההחזרה המיידית)
-    await fetch(`https://discord.com/api/v10/webhooks/${payload.application_id}/${payload.token}`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ content: answer }),
-    });
-  }, 0);
+  // מזניקים קריאה פנימית לפולואפ (לא ממתינים)
+  fetch(`${siteBase}/.netlify/functions/discord`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "x-fu-key": FU_SECRET
+    },
+    body: JSON.stringify({
+      application_id: payload.application_id,
+      token:          payload.token,
+      prompt
+    })
+  }).catch(() => { /* לא מפילים את ההחזרה המיידית */ });
 
-  return json({ type: 5 }); // defer reply
+  // מחזירים defer כדי שדיסקורד יראה "is thinking..."
+  return json({ type: 5 });
 }
+
 
 
     // פקודה לא מוכרת
@@ -196,6 +228,7 @@ if (payload?.type === 2 && payload?.data?.name === "ask") {
     return json({ type: 4, data: { content: "קרסתי קלות. עוד ניסיון." } });
   }
 };
+
 
 
 
