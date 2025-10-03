@@ -1,23 +1,27 @@
 // scripts/register-commands.js
-
 const APP_ID   = process.env.DISCORD_APP_ID || process.env.APP_ID;
-const GUILD_ID = process.env.DISCORD_GUILD_ID;
-const BOT_TOKEN = process.env.DISCORD_BOT_TOKEN;
-const CID = process.env.DISCORD_CLIENT_ID;
-const CSEC = process.env.DISCORD_CLIENT_SECRET;
+const GUILD_ID = process.env.DISCORD_GUILD_ID; // אופציונלי לבדיקות מיידיות בשרת
+const BOT_TOKEN = process.env.DISCORD_BOT_TOKEN; // חלופה 1
+const CID = process.env.DISCORD_CLIENT_ID;       // חלופה 2 (בלי בוט)
+const CSEC = process.env.DISCORD_CLIENT_SECRET;  // חלופה 2
 
 if (!APP_ID) {
-  console.error("Missing DISCORD_APP_ID");
-  process.exit(0);
+  console.error("register-commands: Missing DISCORD_APP_ID");
+  process.exit(1);
 }
 
+// אם אתה רוצה פקודות ב-DM בלבד (User install):
+// const commands = [{ name:"ask", description:"שאל את ה-AI", type:1, integration_types:[1], contexts:[2],
+//   options: [{ name:"prompt", description:"מה לשאול?", type:3, required:true }] }];
+
+// אם אתה רוצה גם ב-DM וגם בשרתים (מומלץ לפיתוח):
 const commands = [
   {
     name: "ask",
     description: "שאל את ה-AI",
     type: 1,
-    integration_types: [1],
-    contexts: [2],
+    integration_types: [1, 0], // User + Guild installs
+    contexts: [2, 0], // DM + Guild
     options: [
       { name: "prompt", description: "מה לשאול?", type: 3, required: true }
     ]
@@ -51,26 +55,36 @@ async function getAuthHeader() {
 async function put(url, auth) {
   const r = await fetch(url, {
     method: "PUT",
-    headers: {
-      "Authorization": auth,
-      "Content-Type": "application/json"
-    },
+    headers: { "Authorization": auth, "Content-Type": "application/json" },
     body: JSON.stringify(commands)
   });
   const j = await r.json().catch(() => ({}));
-  if (!r.ok) throw new Error(`Failed ${r.status}: ${JSON.stringify(j)}`);
-  console.log("OK", url, j.map(c => c.name));
+  if (!r.ok) throw new Error(`PUT ${url} -> ${r.status}: ${JSON.stringify(j)}`);
+  return j;
+}
+
+async function get(url, auth) {
+  const r = await fetch(url, { headers: { "Authorization": auth } });
+  const j = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(`GET ${url} -> ${r.status}: ${JSON.stringify(j)}`);
+  return j;
 }
 
 (async () => {
   const auth = await getAuthHeader();
 
   if (GUILD_ID) {
-    await put(`https://discord.com/api/v10/applications/${APP_ID}/guilds/${GUILD_ID}/commands`, auth);
+    const gUrl = `https://discord.com/api/v10/applications/${APP_ID}/guilds/${GUILD_ID}/commands`;
+    const gPut = await put(gUrl, auth);
+    const gGet = await get(gUrl, auth);
+    console.log("GUILD OK:", gPut.map(c => c.name), "NOW:", gGet.map(c => c.name));
   }
 
-  await put(`https://discord.com/api/v10/applications/${APP_ID}/commands`, auth);
+  const url = `https://discord.com/api/v10/applications/${APP_ID}/commands`;
+  const putRes = await put(url, auth);
+  const getRes = await get(url, auth);
+  console.log("GLOBAL OK:", putRes.map(c => c.name), "NOW:", getRes.map(c => c.name));
 })().catch(err => {
-  console.error("register-commands error:", err.message);
-  process.exit(0);
+  console.error("register-commands error:", err);
+  process.exit(1);
 });
