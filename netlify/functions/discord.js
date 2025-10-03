@@ -1,4 +1,4 @@
-// ESM + אימות חתימה תקין + קריאה לפונקציית follow-up רגילה
+// netlify/functions/discord.js
 import { verifyKey } from "discord-interactions";
 
 const PUBKEY = (process.env.DISCORD_PUBLIC_KEY || "").trim();
@@ -11,7 +11,6 @@ export const handler = async (event) => {
       return text(401, "missing signature/timestamp/body/pubkey");
     }
 
-    // אל תיגע בגוף, תן בדיוק כפי שהגיע
     const rawForVerify = event.isBase64Encoded ? Buffer.from(event.body, "base64") : event.body;
     const ok = await verifyKey(rawForVerify, sig, ts, PUBKEY);
     if (!ok) return text(401, "bad request signature");
@@ -19,32 +18,29 @@ export const handler = async (event) => {
     const body = event.isBase64Encoded ? Buffer.from(event.body, "base64").toString("utf8") : event.body;
     const payload = JSON.parse(body);
 
-    // Ping
     if (payload?.type === 1) return json({ type: 1 });
 
-    // /ask -> defer + קריאה לפונקציה ask-followup
     if (payload?.type === 2 && payload?.data?.name === "ask") {
       const prompt = payload.data.options?.find(o => o.name === "prompt")?.value || "";
 
-      // base URL מהבקשה עצמה (לא תלוי ב-URL env)
       const proto = (event.headers["x-forwarded-proto"] || "https").split(",")[0].trim();
       const host  = (event.headers["x-forwarded-host"]  || event.headers["host"] || "").split(",")[0].trim();
       const fuUrl = `${proto}://${host}/.netlify/functions/ask-followup`;
 
       console.log("CALL_FOLLOWUP", { fuUrl, hasToken: !!payload.token, hasAppId: !!payload.application_id, promptLen: prompt.length });
 
-      // שיגור לא-חוסם
+      // נוסיף לוג לתגובה מהפונקציה (בלי לעכב את הדחייה)
       fetch(fuUrl, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          application_id: payload.application_id,
-          token: payload.token,
-          prompt
-        })
-      }).catch(e => console.error("FOLLOWUP_CALL_ERR", e?.message));
+        body: JSON.stringify({ application_id: payload.application_id, token: payload.token, prompt })
+      })
+      .then(async (r) => {
+        const txt = await r.text().catch(() => "");
+        console.log("FOLLOWUP_RESP", { status: r.status, body: txt.slice(0, 200) });
+      })
+      .catch(e => console.error("FOLLOWUP_CALL_ERR", e?.message));
 
-      // תשובה דחויה
       return json({ type: 5 }); // DEFERRED_CHANNEL_MESSAGE_WITH_SOURCE
     }
 
