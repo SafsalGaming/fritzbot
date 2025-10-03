@@ -1,5 +1,5 @@
 // netlify/functions/discord.js
-import { verifyKey } from "@discord-interactions/verify-node";
+import { verifyKey } from "discord-interactions";
 
 const PUBKEY = (process.env.DISCORD_PUBLIC_KEY || "").trim();
 
@@ -51,3 +51,4 @@ function json(obj) {
 function resp(code, text) {
   return { statusCode: code, headers: { "Content-Type": "text/plain" }, body: text };
 }
+
