@@ -25,7 +25,27 @@ const commands = [
     options: [
       { name: "text",description: "שאלה", type: 3, required: true }
     ]
-  }
+  },
+  {
+  name: "fritz mode",
+  type: 1, // CHAT_INPUT
+  description: "הפעל/כבה מצב פריץ",
+  integration_types: [1, 0], // User + Guild
+  contexts: [2, 0],          // DM + Guild
+  options: [
+    {
+      type: 3,               // STRING
+      name: "mode",
+      description: "בחר מצב",
+      required: true,
+      choices: [
+        { name: "activate", value: "activate" },
+        { name: "deactivate", value: "deactivate" }
+      ]
+    }
+  ]
+}
+
 ];
 
 async function getAuthHeader() {
@@ -88,6 +108,7 @@ async function get(url, auth) {
   console.error("register-commands error:", err);
   process.exit(1);
 });
+
 
 
 
