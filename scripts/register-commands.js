@@ -20,9 +20,10 @@ const commands = [
     name: "ask",
     type: 1,
     integration_types: [1, 0], // User + Guild installs
+    description: "שאל את פריץ את שעל ליבך",
     contexts: [2, 0], // DM + Guild
     options: [
-      { name: "prompt", description: "", type: 3, required: true }
+      { name: "text", type: 3, required: true }
     ]
   }
 ];
@@ -87,6 +88,7 @@ async function get(url, auth) {
   console.error("register-commands error:", err);
   process.exit(1);
 });
+
 
 
 
