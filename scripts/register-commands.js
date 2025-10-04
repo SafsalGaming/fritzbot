@@ -27,7 +27,7 @@ const commands = [
     ]
   },
   {
-  name: "fritz mode",
+  name: "fritz-mode",
   type: 1, // CHAT_INPUT
   description: "הפעל/כבה מצב פריץ",
   integration_types: [1, 0], // User + Guild
@@ -108,6 +108,7 @@ async function get(url, auth) {
   console.error("register-commands error:", err);
   process.exit(1);
 });
+
 
 
 
