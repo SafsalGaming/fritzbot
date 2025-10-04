@@ -23,7 +23,7 @@ const commands = [
     description: "שאל את פריץ את שעל ליבך",
     contexts: [2, 0], // DM + Guild
     options: [
-      { name: "text", type: 3, required: true }
+      { name: "text",description: "שאלה", type: 3, required: true }
     ]
   }
 ];
@@ -88,6 +88,7 @@ async function get(url, auth) {
   console.error("register-commands error:", err);
   process.exit(1);
 });
+
 
 
 
