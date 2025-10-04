@@ -188,7 +188,7 @@ export async function handler(event) {
       return { statusCode: 200, body: "" };
     }
     // ===== SLASH: /fritz =====
-if (body?.type === 2 && body?.data?.name === "fritz mode") {
+if (body?.type === 2 && body?.data?.name === "fritz-mode") {
   const mode = (body.data.options || []).find(o => o.name === "mode")?.value;
   let content = "Unknown mode.";
   if (mode === "activate")   content = "FRITZ MODE ACTIVATED ✅";
@@ -207,6 +207,7 @@ if (body?.type === 2 && body?.data?.name === "fritz mode") {
     return json({ type: 4, data: { content: "קרסתי קלות. עוד ניסיון." } });
   }
 }
+
 
 
 
