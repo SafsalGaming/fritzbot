@@ -188,7 +188,7 @@ export async function handler(event) {
       return { statusCode: 200, body: "" };
     }
     // ===== SLASH: /fritz =====
-if (body?.type === 2 && body?.data?.name === "fritz") {
+if (body?.type === 2 && body?.data?.name === "fritz-mode") {
   // 1) defer ציבורי כדי לעצור את ה־3 שניות
   await deferPublicInteraction(body);
 
@@ -214,6 +214,7 @@ if (body?.type === 2 && body?.data?.name === "fritz") {
     return json({ type: 4, data: { content: "קרסתי קלות. עוד ניסיון." } });
   }
 }
+
 
 
 
