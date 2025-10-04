@@ -188,15 +188,22 @@ export async function handler(event) {
       return { statusCode: 200, body: "" };
     }
     // ===== SLASH: /fritz =====
-if (body?.type === 2 && body?.data?.name === "fritz-mode") {
+if (body?.type === 2 && body?.data?.name === "fritz") {
+  // 1) defer ציבורי כדי לעצור את ה־3 שניות
+  await deferPublicInteraction(body);
+
+  // 2) קורא את הבחירה
   const mode = (body.data.options || []).find(o => o.name === "mode")?.value;
   let content = "Unknown mode.";
   if (mode === "activate")   content = "FRITZ MODE ACTIVATED ✅";
   if (mode === "deactivate") content = "FRITZ MODE DEACTIVATED ❌";
 
-  // החזרה מיידית (לא צריך defer)
-  return json({ type: 4, data: { content } });
+  // 3) עורך את ההודעה המקורית (מסיים את ה־thinking)
+  await editOriginal(body, { content });
+
+  return { statusCode: 200, body: "" };
 }
+
 
 
     // ===== UNKNOWN COMMAND / TYPE =====
@@ -207,6 +214,7 @@ if (body?.type === 2 && body?.data?.name === "fritz-mode") {
     return json({ type: 4, data: { content: "קרסתי קלות. עוד ניסיון." } });
   }
 }
+
 
 
 
