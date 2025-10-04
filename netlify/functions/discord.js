@@ -187,6 +187,17 @@ export async function handler(event) {
       // 4) סיום הפונקציה
       return { statusCode: 200, body: "" };
     }
+    // ===== SLASH: /fritz =====
+if (body?.type === 2 && body?.data?.name === "fritz mode") {
+  const mode = (body.data.options || []).find(o => o.name === "mode")?.value;
+  let content = "Unknown mode.";
+  if (mode === "activate")   content = "FRITZ MODE ACTIVATED ✅";
+  if (mode === "deactivate") content = "FRITZ MODE DEACTIVATED ❌";
+
+  // החזרה מיידית (לא צריך defer)
+  return json({ type: 4, data: { content } });
+}
+
 
     // ===== UNKNOWN COMMAND / TYPE =====
     return json({ type: 4, data: { content: "לא יודע מה רצית. תן /ask ומשהו קונקרטי." } });
@@ -196,6 +207,7 @@ export async function handler(event) {
     return json({ type: 4, data: { content: "קרסתי קלות. עוד ניסיון." } });
   }
 }
+
 
 
 
