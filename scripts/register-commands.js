@@ -18,7 +18,6 @@ if (!APP_ID) {
 const commands = [
   {
     name: "ask",
-    description: "שאל את פריץ את שעל ליבך",
     type: 1,
     integration_types: [1, 0], // User + Guild installs
     contexts: [2, 0], // DM + Guild
@@ -88,5 +87,6 @@ async function get(url, auth) {
   console.error("register-commands error:", err);
   process.exit(1);
 });
+
 
 
