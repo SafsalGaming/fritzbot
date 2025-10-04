@@ -172,7 +172,7 @@ export async function handler(event) {
       await deferPublicInteraction(body);
 
       // 2) משיג תשובה מהמודל
-      const prompt = (body.data.options || []).find(o => o.name === "prompt")?.value || "";
+      const prompt = (body.data.options || []).find(o => o.name === "text")?.value || "";
       let answer = "אין לי תשובה כרגע.";
       if (GROQ_API_KEY) {
         answer = await askGroq(prompt);
@@ -196,6 +196,7 @@ export async function handler(event) {
     return json({ type: 4, data: { content: "קרסתי קלות. עוד ניסיון." } });
   }
 }
+
 
 
 
