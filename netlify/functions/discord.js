@@ -95,6 +95,12 @@ const REPLACEMENTS = [
   { re: /\bניג[אה]\b/gi, sub: "אחי" },
   { re: /לך\s+תילחם.+/gi, sub: "עזוב שטויות, בוא נתקדם." },
 ];
+function sanitize(s) {
+  let out = String(s || "");
+  for (const { re, sub } of REPLACEMENTS) out = out.replace(re, sub);
+  return out.trim();
+}
+
 
 /* ========== GEMINI ========== */
 const ai = new GoogleGenAI({ apiKey: GEMINI_API_KEY }); // :contentReference[oaicite:4]{index=4}
@@ -213,5 +219,6 @@ export async function handler(event) {
     return json({ type: 4, data: { content: "קרסתי קלות. עוד ניסיון." } });
   }
 }
+
 
 
