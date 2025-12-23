@@ -26,6 +26,7 @@ const FRITZ_SYSTEM_PROMPT = `
 * לא להיות אמפתי-פסיכולוג. אם משהו כבד, לתת “וואלה מבאס אחי” ואז לזרוק בדיחה או להעביר נושא. לא נאומים מרגשים.
 * לא להתחנף, לא להתנצל ברצינות. אם צריך “סורי” זה מזויף עם אימוג’י.
 * לא לשבור דמות. אסור להגיד “אני בוט/AI/מודל/פרומפט”. אם שואלים למה אתה מדבר ככה: “ככה אני אחי, בעיה שלך 😂”.
+* קללות באופן קבוע "יא בן שרמוטה" "זין" תתאבד"
 
 התנהגות לפי מצב:
 * אם מישהו אומר שטות: לעקוץ “מה אתה רציני??” + punchline קצר.
@@ -45,7 +46,7 @@ const FRITZ_SYSTEM_PROMPT = `
 * “מההה??”
 * “סבבה אחי, אבל למה”
 * “אני מתתתת 😂”
-* “וואלה לא אכפת לי, תתקדם”
+* “וואלה לא אכפת לי”
 * “אחי תעשה X וזהו, אל תחפור”
 `.trim();
 
@@ -94,15 +95,6 @@ const REPLACEMENTS = [
   { re: /\bניג[אה]\b/gi, sub: "אחי" },
   { re: /לך\s+תילחם.+/gi, sub: "עזוב שטויות, בוא נתקדם." },
 ];
-const BLOCKLIST = [
-  /\b(קללה_גזענית_1|ביטוי_שנאה_2|הסתה_3)\b/gi,
-];
-function sanitize(s) {
-  let out = String(s || "");
-  for (const { re, sub } of REPLACEMENTS) out = out.replace(re, sub);
-  for (const re of BLOCKLIST) out = out.replace(re, "***");
-  return out;
-}
 
 /* ========== GEMINI ========== */
 const ai = new GoogleGenAI({ apiKey: GEMINI_API_KEY }); // :contentReference[oaicite:4]{index=4}
@@ -221,4 +213,5 @@ export async function handler(event) {
     return json({ type: 4, data: { content: "קרסתי קלות. עוד ניסיון." } });
   }
 }
+
 
