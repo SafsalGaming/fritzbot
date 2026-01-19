@@ -109,8 +109,11 @@ async function askGemini(prompt) {
   const models = GEMINI_MODEL_ENV
     ? [GEMINI_MODEL_ENV]
     : [
-        "gemini-3-flash-preview",
+        "gemini-3-flash",
         "gemini-2.5-flash",
+        "gemini-2.5-flash-lite",
+        "gemini-2.5-flash-tts",
+        "gemini-2.5-flash-native-audio-dialog",
         "gemini-2.0-flash",
       ]; // :contentReference[oaicite:5]{index=5}
 
@@ -119,6 +122,9 @@ async function askGemini(prompt) {
 
   try {
     let lastErr = "no-model";
+    let sawQuota = false;
+    let lastErrWasQuota = false;
+    let quotaDetail = "";
     for (const model of models) {
       try {
         const response = await ai.models.generateContent({
@@ -138,12 +144,26 @@ async function askGemini(prompt) {
       } catch (e) {
         const msg = (e && (e.message || String(e))) || "";
         if (e?.name === "AbortError") { lastErr = "timeout"; break; }
+        const lower = msg.toLowerCase();
+        const isQuota =
+          e?.status === "RESOURCE_EXHAUSTED" ||
+          lower.includes("resource_exhausted") ||
+          lower.includes("quota exceeded") ||
+          lower.includes("429");
+        if (isQuota) {
+          sawQuota = true;
+          quotaDetail = `model=${model}`;
+        }
+        lastErrWasQuota = isQuota;
         lastErr = msg || "unknown";
         // אם מודל ספציפי לא זמין לך, לפעמים זה מתבטא כשגיאה כללית, אז ננסה הבא
         continue;
       }
     }
     clearTimeout(t);
+    if (sawQuota && lastErrWasQuota) {
+      return `לא הצלחתי להביא תשובה (מכסה נגמרה). ${quotaDetail}`.trim();
+    }
     return `לא הצלחתי להביא תשובה (${lastErr}).`;
   } catch (e) {
     clearTimeout(t);
