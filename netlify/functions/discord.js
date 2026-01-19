@@ -112,9 +112,11 @@ async function askGemini(prompt) {
         "gemini-3-flash",
         "gemini-2.5-flash",
         "gemini-2.5-flash-lite",
-        "gemini-2.5-flash-tts",
-        "gemini-2.5-flash-native-audio-dialog",
-        "gemini-2.0-flash",
+        "gemma-3-12b",
+        "gemma-3-1b",
+        "gemma-3-27b",
+        "gemma-3-2b",
+        "gemma-3-4b",
       ]; // :contentReference[oaicite:5]{index=5}
 
   const controller = new AbortController();
@@ -162,7 +164,7 @@ async function askGemini(prompt) {
     }
     clearTimeout(t);
     if (sawQuota && lastErrWasQuota) {
-      return `לא הצלחתי להביא תשובה (מכסה נגמרה). ${quotaDetail}`.trim();
+      return `לא הצלחתי להביא תשובה (מכסה נגמרה). ${quotaDetail}`;
     }
     return `לא הצלחתי להביא תשובה (${lastErr}).`;
   } catch (e) {
