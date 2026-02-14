@@ -106,18 +106,14 @@ function sanitize(s) {
 const ai = new GoogleGenAI({ apiKey: GEMINI_API_KEY }); // :contentReference[oaicite:4]{index=4}
 
 async function askGemini(prompt) {
+  const fallbackModels = [
+    "gemini-2.5-flash",
+    "gemini-2.5-flash-lite",
+    "gemini-2.0-flash",
+  ];
   const models = GEMINI_MODEL_ENV
-    ? [GEMINI_MODEL_ENV]
-    : [
-        "gemini-3-flash",
-        "gemini-2.5-flash",
-        "gemini-2.5-flash-lite",
-        "gemma-3-12b",
-        "gemma-3-1b",
-        "gemma-3-27b",
-        "gemma-3-2b",
-        "gemma-3-4b",
-      ]; // :contentReference[oaicite:5]{index=5}
+    ? [GEMINI_MODEL_ENV, ...fallbackModels.filter((m) => m !== GEMINI_MODEL_ENV)]
+    : fallbackModels; // :contentReference[oaicite:5]{index=5}
 
   const controller = new AbortController();
   const t = setTimeout(() => controller.abort(), 9000);
@@ -147,11 +143,14 @@ async function askGemini(prompt) {
         const msg = (e && (e.message || String(e))) || "";
         if (e?.name === "AbortError") { lastErr = "timeout"; break; }
         const lower = msg.toLowerCase();
+        const status = e?.status || "";
+        const code = e?.code || e?.statusCode || 0;
         const isQuota =
-          e?.status === "RESOURCE_EXHAUSTED" ||
+          status === "RESOURCE_EXHAUSTED" ||
+          Number(code) === 429 ||
           lower.includes("resource_exhausted") ||
-          lower.includes("quota exceeded") ||
-          lower.includes("429");
+          lower.includes("resource exhausted") ||
+          lower.includes("quota exceeded");
         if (isQuota) {
           sawQuota = true;
           quotaDetail = `model=${model}`;
