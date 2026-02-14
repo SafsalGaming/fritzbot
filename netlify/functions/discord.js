@@ -143,11 +143,14 @@ async function askGemini(prompt) {
         const msg = (e && (e.message || String(e))) || "";
         if (e?.name === "AbortError") { lastErr = "timeout"; break; }
         const lower = msg.toLowerCase();
+        const status = e?.status || "";
+        const code = e?.code || e?.statusCode || 0;
         const isQuota =
-          e?.status === "RESOURCE_EXHAUSTED" ||
+          status === "RESOURCE_EXHAUSTED" ||
+          Number(code) === 429 ||
           lower.includes("resource_exhausted") ||
-          lower.includes("quota exceeded") ||
-          lower.includes("429");
+          lower.includes("resource exhausted") ||
+          lower.includes("quota exceeded");
         if (isQuota) {
           sawQuota = true;
           quotaDetail = `model=${model}`;
