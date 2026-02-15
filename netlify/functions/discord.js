@@ -130,17 +130,38 @@ async function askGemini(prompt) {
 
     for (const model of models) {
       try {
-        const response = await ai.models.generateContent({
-          model,
-          contents: prompt || "",
-          config: {
-            systemInstruction: FRITZ_SYSTEM_PROMPT,
-            // Fast + short output for Discord responses.
-            maxOutputTokens: 180,
-            temperature: 0.6,
-            thinkingConfig: { thinkingLevel: "minimal" },
-          },
-        }, { signal: controller.signal });
+        const baseConfig = {
+          systemInstruction: FRITZ_SYSTEM_PROMPT,
+          // Fast + short output for Discord responses.
+          maxOutputTokens: 180,
+          temperature: 0.6,
+        };
+
+        let response;
+        try {
+          response = await ai.models.generateContent({
+            model,
+            contents: prompt || "",
+            config: {
+              ...baseConfig,
+              thinkingConfig: { thinkingLevel: "minimal" },
+            },
+          }, { signal: controller.signal });
+        } catch (firstErr) {
+          const firstMsg = ((firstErr && (firstErr.message || String(firstErr))) || "").toLowerCase();
+          const unsupportedThinking =
+            firstMsg.includes("thinking level is not supported") ||
+            firstMsg.includes("thinkingconfig") ||
+            firstMsg.includes("thinking level");
+
+          if (!unsupportedThinking) throw firstErr;
+
+          response = await ai.models.generateContent({
+            model,
+            contents: prompt || "",
+            config: baseConfig,
+          }, { signal: controller.signal });
+        }
 
         clearTimeout(t);
         return (response?.text || "").trim() || "No answer right now.";
