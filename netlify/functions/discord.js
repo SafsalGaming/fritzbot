@@ -103,8 +103,7 @@ function sanitize(s) {
 
 
 /* ========== GEMINI ========== */
-<<<<<<< HEAD
-const ai = new GoogleGenAI({ apiKey: GEMINI_API_KEY }); // :contentReference[oaicite:4]{index=4}
+const ai = new GoogleGenAI({ apiKey: GEMINI_API_KEY });
 const DEFAULT_TEXT_MODELS = [
   "gemini-3-flash",
   "gemini-3-pro",
@@ -116,76 +115,6 @@ const DEFAULT_TEXT_MODELS = [
   "gemini-2.0-flash-lite",
   "gemini-2.0-pro-exp",
 ];
-=======
-const ai = new GoogleGenAI({ apiKey: GEMINI_API_KEY }); // :contentReference[oaicite:4]{index=4}
-
-async function askGemini(prompt) {
-  const fallbackModels = [
-    "gemini-2.5-flash",
-    "gemini-2.5-flash-lite",
-    "gemini-2.0-flash",
-  ];
-  const models = GEMINI_MODEL_ENV
-    ? [GEMINI_MODEL_ENV, ...fallbackModels.filter((m) => m !== GEMINI_MODEL_ENV)]
-    : fallbackModels; // :contentReference[oaicite:5]{index=5}
-
-  const controller = new AbortController();
-  const t = setTimeout(() => controller.abort(), 9000);
-
-  try {
-    let lastErr = "no-model";
-    let sawQuota = false;
-    let lastErrWasQuota = false;
-    let quotaDetail = "";
-    for (const model of models) {
-      try {
-        const response = await ai.models.generateContent({
-          model,
-          contents: prompt || "",
-          config: {
-            systemInstruction: FRITZ_SYSTEM_PROMPT, // :contentReference[oaicite:6]{index=6}
-            // קיצורי דרך: קצר + מהיר
-            maxOutputTokens: 180,                   // :contentReference[oaicite:7]{index=7}
-            temperature: 0.6,                       // :contentReference[oaicite:8]{index=8}
-            thinkingConfig: { thinkingLevel: "minimal" }, // :contentReference[oaicite:9]{index=9}
-          },
-        }, { signal: controller.signal });
-
-        clearTimeout(t);
-        return (response?.text || "").trim() || "אין לי תשובה כרגע.";
-      } catch (e) {
-        const msg = (e && (e.message || String(e))) || "";
-        if (e?.name === "AbortError") { lastErr = "timeout"; break; }
-        const lower = msg.toLowerCase();
-        const status = e?.status || "";
-        const code = e?.code || e?.statusCode || 0;
-        const isQuota =
-          status === "RESOURCE_EXHAUSTED" ||
-          Number(code) === 429 ||
-          lower.includes("resource_exhausted") ||
-          lower.includes("resource exhausted") ||
-          lower.includes("quota exceeded");
-        if (isQuota) {
-          sawQuota = true;
-          quotaDetail = `model=${model}`;
-        }
-        lastErrWasQuota = isQuota;
-        lastErr = msg || "unknown";
-        // אם מודל ספציפי לא זמין לך, לפעמים זה מתבטא כשגיאה כללית, אז ננסה הבא
-        continue;
-      }
-    }
-    clearTimeout(t);
-    if (sawQuota && lastErrWasQuota) {
-      return `לא הצלחתי להביא תשובה (מכסה נגמרה). ${quotaDetail}`;
-    }
-    return `לא הצלחתי להביא תשובה (${lastErr}).`;
-  } catch (e) {
-    clearTimeout(t);
-    return "נפלתי בדרך. נסה שוב.";
-  }
-}
->>>>>>> e3376e44705a62d49ab4bfd034cc153ce87fd276
 
 async function askGemini(prompt) {
   const models = GEMINI_MODEL_ENV
@@ -223,9 +152,13 @@ async function askGemini(prompt) {
         }
 
         const lower = msg.toLowerCase();
+        const status = String(e?.status || "").toUpperCase();
+        const code = Number(e?.code || e?.statusCode || 0);
         const isQuota =
-          e?.status === "RESOURCE_EXHAUSTED" ||
+          status === "RESOURCE_EXHAUSTED" ||
+          code === 429 ||
           lower.includes("resource_exhausted") ||
+          lower.includes("resource exhausted") ||
           lower.includes("quota exceeded") ||
           lower.includes("429");
 
@@ -255,16 +188,15 @@ async function askGemini(prompt) {
     clearTimeout(t);
     if (quotaModels.length > 0) {
       const tried = quotaModels.join(", ");
-      return `Couldn't get an answer (quota exhausted). Tried: ${tried}`;
+      return "Couldn't get an answer (quota exhausted). Tried: " + tried;
     }
 
-    return `Couldn't get an answer (${lastErr}).`;
+    return "Couldn't get an answer (" + lastErr + ").";
   } catch (e) {
     clearTimeout(t);
     return "Request failed. Try again.";
   }
 }
-
 /* ========== HANDLER ========== */
 export async function handler(event) {
   try {
