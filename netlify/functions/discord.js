@@ -104,72 +104,93 @@ function sanitize(s) {
 
 /* ========== GEMINI ========== */
 const ai = new GoogleGenAI({ apiKey: GEMINI_API_KEY }); // :contentReference[oaicite:4]{index=4}
+const DEFAULT_TEXT_MODELS = [
+  "gemini-3-flash",
+  "gemini-3-pro",
+  "gemini-2.5-flash",
+  "gemini-2.5-flash-lite",
+  "gemini-2.5-pro",
+  "gemini-2.0-flash",
+  "gemini-2.0-flash-exp",
+  "gemini-2.0-flash-lite",
+  "gemini-2.0-pro-exp",
+];
 
 async function askGemini(prompt) {
   const models = GEMINI_MODEL_ENV
-    ? [GEMINI_MODEL_ENV]
-    : [
-        "gemini-3-flash",
-        "gemini-2.5-flash",
-        "gemini-2.5-flash-lite",
-        "gemma-3-12b",
-        "gemma-3-1b",
-        "gemma-3-27b",
-        "gemma-3-2b",
-        "gemma-3-4b",
-      ]; // :contentReference[oaicite:5]{index=5}
+    ? GEMINI_MODEL_ENV.split(",").map((m) => m.trim()).filter(Boolean)
+    : DEFAULT_TEXT_MODELS;
 
   const controller = new AbortController();
   const t = setTimeout(() => controller.abort(), 9000);
 
   try {
     let lastErr = "no-model";
-    let sawQuota = false;
-    let lastErrWasQuota = false;
-    let quotaDetail = "";
+    const quotaModels = [];
+
     for (const model of models) {
       try {
         const response = await ai.models.generateContent({
           model,
           contents: prompt || "",
           config: {
-            systemInstruction: FRITZ_SYSTEM_PROMPT, // :contentReference[oaicite:6]{index=6}
-            // קיצורי דרך: קצר + מהיר
-            maxOutputTokens: 180,                   // :contentReference[oaicite:7]{index=7}
-            temperature: 0.6,                       // :contentReference[oaicite:8]{index=8}
-            thinkingConfig: { thinkingLevel: "minimal" }, // :contentReference[oaicite:9]{index=9}
+            systemInstruction: FRITZ_SYSTEM_PROMPT,
+            // Fast + short output for Discord responses.
+            maxOutputTokens: 180,
+            temperature: 0.6,
+            thinkingConfig: { thinkingLevel: "minimal" },
           },
         }, { signal: controller.signal });
 
         clearTimeout(t);
-        return (response?.text || "").trim() || "אין לי תשובה כרגע.";
+        return (response?.text || "").trim() || "No answer right now.";
       } catch (e) {
         const msg = (e && (e.message || String(e))) || "";
-        if (e?.name === "AbortError") { lastErr = "timeout"; break; }
+        if (e?.name === "AbortError") {
+          lastErr = "timeout";
+          break;
+        }
+
         const lower = msg.toLowerCase();
         const isQuota =
           e?.status === "RESOURCE_EXHAUSTED" ||
           lower.includes("resource_exhausted") ||
           lower.includes("quota exceeded") ||
           lower.includes("429");
+
+        const isModelUnavailable =
+          lower.includes("model not found") ||
+          lower.includes("not found for api version") ||
+          lower.includes("is not found") ||
+          lower.includes("unsupported model") ||
+          lower.includes("permission denied");
+
         if (isQuota) {
-          sawQuota = true;
-          quotaDetail = `model=${model}`;
+          quotaModels.push(model);
+          lastErr = msg || "quota";
+          continue;
         }
-        lastErrWasQuota = isQuota;
+
+        if (isModelUnavailable) {
+          lastErr = msg || "model-unavailable";
+          continue;
+        }
+
         lastErr = msg || "unknown";
-        // אם מודל ספציפי לא זמין לך, לפעמים זה מתבטא כשגיאה כללית, אז ננסה הבא
-        continue;
+        break;
       }
     }
+
     clearTimeout(t);
-    if (sawQuota && lastErrWasQuota) {
-      return `לא הצלחתי להביא תשובה (מכסה נגמרה). ${quotaDetail}`;
+    if (quotaModels.length > 0) {
+      const tried = quotaModels.join(", ");
+      return `Couldn't get an answer (quota exhausted). Tried: ${tried}`;
     }
-    return `לא הצלחתי להביא תשובה (${lastErr}).`;
+
+    return `Couldn't get an answer (${lastErr}).`;
   } catch (e) {
     clearTimeout(t);
-    return "נפלתי בדרך. נסה שוב.";
+    return "Request failed. Try again.";
   }
 }
 
