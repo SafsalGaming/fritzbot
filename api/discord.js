@@ -45,6 +45,7 @@ export const config = {
     bodyParser: false,
   },
 };
+export const maxDuration = 60;
 
 /* ========== HTTP HELPERS ========== */
 const getSingleHeader = (value) => (Array.isArray(value) ? value[0] : value || "");
@@ -77,6 +78,7 @@ const NOAUTH_HEADERS = {
 };
 
 async function deferPublicInteraction(body) {
+  console.log("DISCORD_DEFER_START", body?.id);
   const r = await fetch(`${API}/interactions/${body.id}/${body.token}/callback`, {
     method: "POST",
     headers: NOAUTH_HEADERS,
@@ -85,10 +87,13 @@ async function deferPublicInteraction(body) {
   if (!r.ok) {
     const txt = await r.text().catch(() => "");
     console.error("deferPublicInteraction failed:", r.status, txt);
+  } else {
+    console.log("DISCORD_DEFER_OK", body?.id);
   }
 }
 
 async function editOriginal(body, payload) {
+  console.log("DISCORD_EDIT_START", body?.id);
   const appId = body.application_id;
   const r = await fetch(`${API}/webhooks/${appId}/${body.token}/messages/@original`, {
     method: "PATCH",
@@ -98,6 +103,8 @@ async function editOriginal(body, payload) {
   if (!r.ok) {
     const txt = await r.text().catch(() => "");
     console.error("editOriginal failed:", r.status, txt);
+  } else {
+    console.log("DISCORD_EDIT_OK", body?.id);
   }
 }
 
@@ -128,6 +135,20 @@ function extractOpenAIText(payload) {
     for (const c of item.content) {
       if (c?.type === "output_text" && typeof c.text === "string") {
         parts.push(c.text);
+      }
+      if (c?.type === "text" && typeof c.text === "string") {
+        parts.push(c.text);
+      }
+      if (
+        c?.type === "text" &&
+        c?.text &&
+        typeof c.text === "object" &&
+        typeof c.text.value === "string"
+      ) {
+        parts.push(c.text.value);
+      }
+      if (c?.type === "refusal" && typeof c.refusal === "string") {
+        parts.push(c.refusal);
       }
     }
   }
@@ -172,12 +193,12 @@ async function callOpenAI(model, prompt, signal) {
     throw err;
   }
 
-  return extractOpenAIText(data) || "No answer right now.";
+  return extractOpenAIText(data) || "Model returned an empty response. Try again.";
 }
 
 async function askOpenAI(prompt) {
   const controller = new AbortController();
-  const t = setTimeout(() => controller.abort(), 9000);
+  const t = setTimeout(() => controller.abort(), 6500);
 
   try {
     const textOut = await callOpenAI(OPENAI_MODEL, prompt, controller.signal);
@@ -192,6 +213,7 @@ async function askOpenAI(prompt) {
 /* ========== HANDLER ========== */
 export default async function handler(req, res) {
   try {
+    console.log("DISCORD_REQ", req.method, req.url);
     if (req.method !== "POST") {
       return text(res, 405, "Method Not Allowed");
     }
