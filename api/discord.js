@@ -229,7 +229,7 @@ async function callOpenAI(prompt, signal) {
     },
     body: JSON.stringify({
       model: OPENAI_MODEL,
-      reasoning: { effort: "minimal" },
+      reasoning: { effort: "low" },
       text: { verbosity: "low", format: { type: "text" } },
       input: [
         {
