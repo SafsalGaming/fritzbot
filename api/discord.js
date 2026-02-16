@@ -126,6 +126,13 @@ function extractOpenAIText(payload) {
   if (typeof payload.output_text === "string" && payload.output_text.trim()) {
     return payload.output_text.trim();
   }
+  if (
+    payload.response &&
+    typeof payload.response.output_text === "string" &&
+    payload.response.output_text.trim()
+  ) {
+    return payload.response.output_text.trim();
+  }
 
   if (!Array.isArray(payload.output)) return "";
 
@@ -135,6 +142,14 @@ function extractOpenAIText(payload) {
     for (const c of item.content) {
       if (c?.type === "output_text" && typeof c.text === "string") {
         parts.push(c.text);
+      }
+      if (
+        c?.type === "output_text" &&
+        c?.text &&
+        typeof c.text === "object" &&
+        typeof c.text.value === "string"
+      ) {
+        parts.push(c.text.value);
       }
       if (c?.type === "text" && typeof c.text === "string") {
         parts.push(c.text);
@@ -152,6 +167,16 @@ function extractOpenAIText(payload) {
       }
     }
   }
+
+  if (
+    Array.isArray(payload.choices) &&
+    payload.choices[0] &&
+    payload.choices[0].message
+  ) {
+    const compat = payload.choices[0].message.content;
+    if (typeof compat === "string" && compat.trim()) parts.push(compat);
+  }
+
   return parts.join("\n").trim();
 }
 
@@ -164,16 +189,8 @@ async function callOpenAI(model, prompt, signal) {
     },
     body: JSON.stringify({
       model,
-      input: [
-        {
-          role: "system",
-          content: [{ type: "input_text", text: FRITZ_SYSTEM_PROMPT }],
-        },
-        {
-          role: "user",
-          content: [{ type: "input_text", text: prompt || "" }],
-        },
-      ],
+      instructions: FRITZ_SYSTEM_PROMPT,
+      input: prompt || "",
       max_output_tokens: 180,
     }),
     signal,
@@ -193,7 +210,14 @@ async function callOpenAI(model, prompt, signal) {
     throw err;
   }
 
-  return extractOpenAIText(data) || "Model returned an empty response. Try again.";
+  const extracted = extractOpenAIText(data);
+  if (!extracted) {
+    const status = data && data.status ? String(data.status) : "unknown";
+    const outLen = Array.isArray(data?.output) ? data.output.length : 0;
+    console.warn("OPENAI_EMPTY_OUTPUT", { status, outLen, model });
+    return "Model returned an empty response. Try again.";
+  }
+  return extracted;
 }
 
 async function askOpenAI(prompt) {
