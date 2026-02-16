@@ -76,15 +76,16 @@ const NOAUTH_HEADERS = {
   "User-Agent": "DiscordBot (vercel-fn,1.0)"
 };
 
-async function scheduleBackground(task) {
-  try {
-    const maybeVercel = await import("@vercel/functions");
-    if (typeof maybeVercel?.waitUntil === "function") {
-      maybeVercel.waitUntil(task);
-      return;
-    }
-  } catch {}
-  void task;
+async function deferPublicInteraction(body) {
+  const r = await fetch(`${API}/interactions/${body.id}/${body.token}/callback`, {
+    method: "POST",
+    headers: NOAUTH_HEADERS,
+    body: JSON.stringify({ type: 5 })
+  });
+  if (!r.ok) {
+    const txt = await r.text().catch(() => "");
+    console.error("deferPublicInteraction failed:", r.status, txt);
+  }
 }
 
 async function editOriginal(body, payload) {
@@ -216,22 +217,21 @@ export default async function handler(req, res) {
 
     // ===== SLASH: /ask =====
     if (body?.type === 2 && body?.data?.name === "ask") {
-      const prompt = (body.data.options || []).find(o => o.name === "text")?.value || "";
-      const task = (async () => {
-        let answer = "No answer right now.";
-        if (OPENAI_API_KEY) {
-          answer = await askOpenAI(prompt);
-        } else {
-          answer = "Missing OPENAI_API_KEY in environment.";
-        }
-        answer = sanitize(answer);
-        await editOriginal(body, { content: answer });
-      })().catch((err) => {
-        console.error("ASK_BACKGROUND_ERR", err && (err.stack || err.message || err));
-      });
+      await deferPublicInteraction(body);
 
-      void scheduleBackground(task);
-      return json(res, { type: 5 });
+      const prompt = (body.data.options || []).find(o => o.name === "text")?.value || "";
+      let answer = "No answer right now.";
+      if (OPENAI_API_KEY) {
+        answer = await askOpenAI(prompt);
+      } else {
+        answer = "Missing OPENAI_API_KEY in environment.";
+      }
+
+      answer = sanitize(answer);
+      await editOriginal(body, { content: answer });
+
+      res.statusCode = 200;
+      return res.end("");
     }
 
     // ===== SLASH: /fritz-mode =====
