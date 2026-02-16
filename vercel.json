@@ -3,6 +3,10 @@
     {
       "source": "/interactions",
       "destination": "/api/discord"
+    },
+    {
+      "source": "/interactions/",
+      "destination": "/api/discord"
     }
   ]
 }
