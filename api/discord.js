@@ -221,58 +221,81 @@ function summarizeOpenAIResponseShape(payload) {
 }
 
 async function callOpenAI(prompt, signal) {
-  const r = await fetch("https://api.openai.com/v1/responses", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "Authorization": `Bearer ${OPENAI_API_KEY}`,
-    },
-    body: JSON.stringify({
-      model: OPENAI_MODEL,
-      reasoning: { effort: "low" },
-      text: { verbosity: "low", format: { type: "text" } },
-      input: [
-        {
-          role: "system",
-          content: [{ type: "input_text", text: FRITZ_SYSTEM_PROMPT }],
-        },
-        {
-          role: "user",
-          content: [{ type: "input_text", text: prompt || "" }],
-        },
-      ],
-      max_output_tokens: 260,
-    }),
-    signal,
-  });
+  const callOnce = async (effort, maxOutputTokens, promptOverride) => {
+    const r = await fetch("https://api.openai.com/v1/responses", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${OPENAI_API_KEY}`,
+      },
+      body: JSON.stringify({
+        model: OPENAI_MODEL,
+        reasoning: { effort },
+        text: { verbosity: "low", format: { type: "text" } },
+        input: [
+          {
+            role: "system",
+            content: [{ type: "input_text", text: FRITZ_SYSTEM_PROMPT }],
+          },
+          {
+            role: "user",
+            content: [{ type: "input_text", text: promptOverride ?? prompt ?? "" }],
+          },
+        ],
+        max_output_tokens: maxOutputTokens,
+      }),
+      signal,
+    });
 
-  const raw = await r.text().catch(() => "");
-  let data = null;
-  try {
-    data = raw ? JSON.parse(raw) : null;
-  } catch {
-    data = null;
+    const raw = await r.text().catch(() => "");
+    let data = null;
+    try {
+      data = raw ? JSON.parse(raw) : null;
+    } catch {
+      data = null;
+    }
+
+    if (!r.ok) {
+      const msg = (data && data.error && data.error.message) || raw || `OpenAI HTTP ${r.status}`;
+      const err = new Error(msg);
+      err.status = r.status;
+      throw err;
+    }
+
+    const extracted = extractOpenAIText(data);
+    const shape = summarizeOpenAIResponseShape(data);
+    return { extracted, shape };
+  };
+
+  // First try: user asked for low effort, but give enough tokens to finish.
+  const first = await callOnce("low", 900);
+  if (first.extracted) return first.extracted;
+
+  // If we got the known failure mode (reasoning-only + max_output_tokens), retry with minimal effort.
+  console.warn("OPENAI_EMPTY_OUTPUT", first.shape);
+  const isReasoningOnly =
+    first.shape &&
+    first.shape.ok === true &&
+    first.shape.status === "incomplete" &&
+    first.shape.incomplete_details &&
+    first.shape.incomplete_details.reason === "max_output_tokens" &&
+    Array.isArray(first.shape.output_types) &&
+    first.shape.output_types.length === 1 &&
+    first.shape.output_types[0] === "reasoning";
+
+  if (isReasoningOnly) {
+    const retryPrompt = `ענה בשורה אחת קצרה בלבד (עד 180 תווים). בלי חזרות.\n\n${prompt || ""}`.trim();
+    const second = await callOnce("minimal", 900, retryPrompt);
+    if (second.extracted) return second.extracted;
+    console.warn("OPENAI_EMPTY_OUTPUT_RETRY", second.shape);
   }
 
-  if (!r.ok) {
-    const msg = (data && data.error && data.error.message) || raw || `OpenAI HTTP ${r.status}`;
-    const err = new Error(msg);
-    err.status = r.status;
-    throw err;
-  }
-
-  const extracted = extractOpenAIText(data);
-  if (!extracted) {
-    console.warn("OPENAI_EMPTY_OUTPUT", summarizeOpenAIResponseShape(data));
-    return "Model returned an empty response. Try again.";
-  }
-
-  return extracted;
+  return "Model returned an empty response. Try again.";
 }
 
 async function askOpenAI(prompt) {
   const controller = new AbortController();
-  const t = setTimeout(() => controller.abort(), 5500);
+  const t = setTimeout(() => controller.abort(), 12000);
   try {
     const text = await callOpenAI(prompt, controller.signal);
     clearTimeout(t);
