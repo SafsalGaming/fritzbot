@@ -1,5 +1,5 @@
 // api/discord.js
-// Discord Interactions + OpenAI — clean defer + edit flow (no infinite "thinking").
+// Discord Interactions + OpenAI ג€” clean defer + edit flow (no infinite "thinking").
 // NOTE: set "type": "module" in package.json
 
 import { verifyKey } from "discord-interactions";
@@ -34,6 +34,7 @@ Examples (keep in Hebrew):
 •	“מה אנחנו בדובאי אחי”
 •	“יאללה next”
 •	“אחי תעשה X וזהו, אל תחפור”
+
 
 
 `.trim();
@@ -75,12 +76,15 @@ const NOAUTH_HEADERS = {
   "User-Agent": "DiscordBot (vercel-fn,1.0)"
 };
 
-async function deferPublicInteraction(body) {
-  await fetch(`${API}/interactions/${body.id}/${body.token}/callback`, {
-    method: "POST",
-    headers: NOAUTH_HEADERS,
-    body: JSON.stringify({ type: 5 }) // defer (public)
-  });
+async function scheduleBackground(task) {
+  try {
+    const maybeVercel = await import("@vercel/functions");
+    if (typeof maybeVercel?.waitUntil === "function") {
+      maybeVercel.waitUntil(task);
+      return;
+    }
+  } catch {}
+  void task;
 }
 
 async function editOriginal(body, payload) {
@@ -96,10 +100,10 @@ async function editOriginal(body, payload) {
   }
 }
 
-/* ========== OUTPUT SANITIZE (רך) ========== */
+/* ========== OUTPUT SANITIZE (׳¨׳) ========== */
 const REPLACEMENTS = [
-  { re: /\bניג[אה]\b/gi, sub: "אחי" },
-  { re: /לך\s+תילחם.+/gi, sub: "עזוב שטויות, בוא נתקדם." },
+  { re: /\b׳ ׳™׳’[׳׳”]\b/gi, sub: "׳׳—׳™" },
+  { re: /׳׳\s+׳×׳™׳׳—׳.+/gi, sub: "׳¢׳–׳•׳‘ ׳©׳˜׳•׳™׳•׳×, ׳‘׳•׳ ׳ ׳×׳§׳“׳." },
 ];
 function sanitize(s) {
   let out = String(s || "");
@@ -212,48 +216,40 @@ export default async function handler(req, res) {
 
     // ===== SLASH: /ask =====
     if (body?.type === 2 && body?.data?.name === "ask") {
-      await deferPublicInteraction(body);
-
       const prompt = (body.data.options || []).find(o => o.name === "text")?.value || "";
-      let answer = "אין לי תשובה כרגע.";
+      const task = (async () => {
+        let answer = "No answer right now.";
+        if (OPENAI_API_KEY) {
+          answer = await askOpenAI(prompt);
+        } else {
+          answer = "Missing OPENAI_API_KEY in environment.";
+        }
+        answer = sanitize(answer);
+        await editOriginal(body, { content: answer });
+      })().catch((err) => {
+        console.error("ASK_BACKGROUND_ERR", err && (err.stack || err.message || err));
+      });
 
-      if (OPENAI_API_KEY) {
-        answer = await askOpenAI(prompt);
-      } else {
-        answer = "חסר OPENAI_API_KEY בסביבה.";
-      }
-
-      answer = sanitize(answer);
-      await editOriginal(body, { content: answer });
-
-      res.statusCode = 200;
-      return res.end("");
+      void scheduleBackground(task);
+      return json(res, { type: 5 });
     }
 
     // ===== SLASH: /fritz-mode =====
     if (body?.type === 2 && body?.data?.name === "fritz-mode") {
-      await deferPublicInteraction(body);
-
       const mode = (body.data.options || []).find(o => o.name === "mode")?.value;
       let content = "Unknown mode.";
       if (mode === "activate")   content = "FRITZ MODE ACTIVATED ✅";
       if (mode === "deactivate") content = "FRITZ MODE DEACTIVATED ❌";
-
-      await editOriginal(body, { content });
-      res.statusCode = 200;
-      return res.end("");
+      return json(res, { type: 4, data: { content } });
     }
-
     // ===== UNKNOWN COMMAND / TYPE =====
-    return json(res, { type: 4, data: { content: "לא יודע מה רצית. תן /ask ומשהו קונקרטי." } });
+    return json(res, { type: 4, data: { content: "׳׳ ׳™׳•׳“׳¢ ׳׳” ׳¨׳¦׳™׳×. ׳×׳ /ask ׳•׳׳©׳”׳• ׳§׳•׳ ׳§׳¨׳˜׳™." } });
 
   } catch (e) {
     console.error("DISCORD_FN_ERR", e && (e.stack || e.message || e));
-    return json(res, { type: 4, data: { content: "קרסתי קלות. עוד ניסיון." } });
+    return json(res, { type: 4, data: { content: "׳§׳¨׳¡׳×׳™ ׳§׳׳•׳×. ׳¢׳•׳“ ׳ ׳™׳¡׳™׳•׳." } });
   }
 }
-
-
 
 
 
