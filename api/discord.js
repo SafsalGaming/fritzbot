@@ -134,10 +134,15 @@ function extractOpenAIText(payload) {
     return payload.response.output_text.trim();
   }
 
-  if (!Array.isArray(payload.output)) return "";
+  const outputItems = Array.isArray(payload.output)
+    ? payload.output
+    : Array.isArray(payload.response?.output)
+      ? payload.response.output
+      : null;
+  if (!Array.isArray(outputItems)) return "";
 
   const parts = [];
-  for (const item of payload.output) {
+  for (const item of outputItems) {
     if (!item || !Array.isArray(item.content)) continue;
     for (const c of item.content) {
       if (c?.type === "output_text" && typeof c.text === "string") {
@@ -165,6 +170,18 @@ function extractOpenAIText(payload) {
       if (c?.type === "refusal" && typeof c.refusal === "string") {
         parts.push(c.refusal);
       }
+      if (
+        c?.type === "refusal" &&
+        c?.refusal &&
+        typeof c.refusal === "object" &&
+        typeof c.refusal.value === "string"
+      ) {
+        parts.push(c.refusal.value);
+      }
+      // Be schema-tolerant: if a content part has a plain string `text`, use it.
+      if (typeof c?.text === "string") {
+        parts.push(c.text);
+      }
     }
   }
 
@@ -180,6 +197,33 @@ function extractOpenAIText(payload) {
   return parts.join("\n").trim();
 }
 
+function summarizeOpenAIResponseShape(payload) {
+  if (!payload || typeof payload !== "object") return { ok: false };
+  const outputItems = Array.isArray(payload.output)
+    ? payload.output
+    : Array.isArray(payload.response?.output)
+      ? payload.response.output
+      : [];
+
+  const outputTypes = outputItems.map((o) => o?.type).filter(Boolean);
+  const contentTypes = [];
+  for (const item of outputItems) {
+    if (!item || !Array.isArray(item.content)) continue;
+    for (const c of item.content) contentTypes.push(c?.type);
+  }
+
+  return {
+    ok: true,
+    id: payload.id,
+    status: payload.status,
+    error: payload.error ? { code: payload.error.code, message: payload.error.message } : null,
+    incomplete_details: payload.incomplete_details || null,
+    output_len: outputItems.length,
+    output_types: outputTypes,
+    content_types: contentTypes.filter(Boolean),
+  };
+}
+
 async function callOpenAI(model, prompt, signal) {
   const r = await fetch("https://api.openai.com/v1/responses", {
     method: "POST",
@@ -189,8 +233,17 @@ async function callOpenAI(model, prompt, signal) {
     },
     body: JSON.stringify({
       model,
-      instructions: FRITZ_SYSTEM_PROMPT,
-      input: prompt || "",
+      input: [
+        {
+          role: "system",
+          content: [{ type: "input_text", text: FRITZ_SYSTEM_PROMPT }],
+        },
+        {
+          role: "user",
+          content: [{ type: "input_text", text: prompt || "" }],
+        },
+      ],
+      text: { format: { type: "text" } },
       max_output_tokens: 180,
     }),
     signal,
@@ -210,11 +263,15 @@ async function callOpenAI(model, prompt, signal) {
     throw err;
   }
 
+  if (data && data.error) {
+    const err = new Error(data.error.message || "OpenAI error");
+    err.status = r.status;
+    throw err;
+  }
+
   const extracted = extractOpenAIText(data);
   if (!extracted) {
-    const status = data && data.status ? String(data.status) : "unknown";
-    const outLen = Array.isArray(data?.output) ? data.output.length : 0;
-    console.warn("OPENAI_EMPTY_OUTPUT", { status, outLen, model });
+    console.warn("OPENAI_EMPTY_OUTPUT", summarizeOpenAIResponseShape(data));
     return "Model returned an empty response. Try again.";
   }
   return extracted;
