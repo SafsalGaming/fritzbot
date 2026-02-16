@@ -267,8 +267,8 @@ async function callOpenAI(prompt, signal) {
     return { extracted, shape };
   };
 
-  // First try: user asked for low effort, but give enough tokens to finish.
-  const first = await callOnce("low", 900);
+  // First try: user asked for medium effort, but give enough tokens to finish.
+  const first = await callOnce("medium", 900);
   if (first.extracted) return first.extracted;
 
   // If we got the known failure mode (reasoning-only + max_output_tokens), retry with minimal effort.
