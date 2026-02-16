@@ -243,9 +243,9 @@ async function callOpenAI(model, prompt, signal) {
           content: [{ type: "input_text", text: prompt || "" }],
         },
       ],
-      reasoning: { effort: "none" },
+      reasoning: { effort: "minimal" },
       text: { verbosity: "low", format: { type: "text" } },
-      max_output_tokens: 180,
+      max_output_tokens: 260,
     }),
     signal,
   });
