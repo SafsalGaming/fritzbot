@@ -12,11 +12,6 @@ const BOT_TOKEN = process.env.DISCORD_BOT_TOKEN; // חלופה 1
 const CID = process.env.DISCORD_CLIENT_ID;       // חלופה 2 (בלי בוט)
 const CSEC = process.env.DISCORD_CLIENT_SECRET;  // חלופה 2
 
-if (!APP_ID) {
-  console.error("register-commands: Missing DISCORD_APP_ID / DISCORD_APPLICATION_ID / APP_ID");
-  process.exit(1);
-}
-
 const commands = [
   {
     name: "ask",
@@ -141,6 +136,16 @@ async function get(url, auth) {
 }
 
 (async () => {
+  const hasAppId = Boolean(APP_ID);
+  const hasAuth = Boolean(BOT_TOKEN || (CID && CSEC));
+  if (!hasAppId || !hasAuth) {
+    const missing = [];
+    if (!hasAppId) missing.push("DISCORD_APP_ID/DISCORD_APPLICATION_ID/APP_ID");
+    if (!hasAuth) missing.push("DISCORD_BOT_TOKEN or DISCORD_CLIENT_ID+DISCORD_CLIENT_SECRET");
+    console.warn(`register-commands: skipped (missing ${missing.join(" and ")})`);
+    process.exit(0);
+  }
+
   const auth = await getAuthHeader();
 
   if (GUILD_ID) {
