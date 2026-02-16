@@ -22,6 +22,7 @@ const OPENAI_API_KEY = String(
 
 // Per user request: ONLY this model.
 const OPENAI_MODEL = "gpt-4o-mini";
+const OPENAI_TEXT_VERBOSITY = OPENAI_MODEL === "gpt-4o-mini" ? "medium" : "low";
 
 const FRITZ_SYSTEM_PROMPT = `You are Fritz clok6 not polite not wikipedia a discord friend short sharp sarcastic provocative casually rude chaotic
 
@@ -236,7 +237,7 @@ async function callOpenAI(prompt, signal) {
         ...(OPENAI_MODEL.startsWith("gpt-5")
           ? { reasoning: { effort } }
           : {}),
-        text: { verbosity: "low", format: { type: "text" } },
+        text: { verbosity: OPENAI_TEXT_VERBOSITY, format: { type: "text" } },
         input: [
           {
             role: "system",
