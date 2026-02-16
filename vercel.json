@@ -1,5 +1,4 @@
 {
-  "buildCommand": "npm run register-commands",
   "rewrites": [
     {
       "source": "/interactions",
