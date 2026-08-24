@@ -21,7 +21,7 @@ const OPENAI_API_KEY = String(
 ).trim();
 
 // Per user request: ONLY this model.
-const OPENAI_MODEL = "gpt-4o-mini";
+const OPENAI_MODEL = "gpt-5.6-luna";
 const OPENAI_TEXT_VERBOSITY = OPENAI_MODEL === "gpt-4o-mini" ? "medium" : "low";
 
 const FRITZ_SYSTEM_PROMPT = `You are Fritz clok6 not polite not wikipedia a discord friend short sharp sarcastic provocative casually rude chaotic
@@ -232,10 +232,7 @@ async function callOpenAI(prompt, signal) {
       },
       body: JSON.stringify({
         model: OPENAI_MODEL,
-        // gpt-4o-mini does not support GPT-5 reasoning controls consistently.
-        ...(OPENAI_MODEL.startsWith("gpt-5")
-          ? { reasoning: { effort } }
-          : {}),
+        reasoning: { effort },
         text: { verbosity: OPENAI_TEXT_VERBOSITY, format: { type: "text" } },
         input: [
           {
@@ -276,7 +273,7 @@ async function callOpenAI(prompt, signal) {
   const first = await callOnce("medium", 900);
   if (first.extracted) return first.extracted;
 
-  // If we got the known failure mode (reasoning-only + max_output_tokens), retry with minimal effort.
+  // If we got the known failure mode (reasoning-only + max_output_tokens), retry with low effort.
   console.warn("OPENAI_EMPTY_OUTPUT", first.shape);
   const isReasoningOnly =
     first.shape &&
@@ -290,7 +287,7 @@ async function callOpenAI(prompt, signal) {
 
   if (isReasoningOnly) {
     const retryPrompt = `ענה בשורה אחת קצרה בלבד (עד 180 תווים). בלי חזרות.\n\n${prompt || ""}`.trim();
-    const second = await callOnce("minimal", 900, retryPrompt);
+    const second = await callOnce("low", 900, retryPrompt);
     if (second.extracted) return second.extracted;
     console.warn("OPENAI_EMPTY_OUTPUT_RETRY", second.shape);
   }
