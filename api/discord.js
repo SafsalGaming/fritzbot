@@ -87,16 +87,20 @@ const DISCORD_HEADERS = {
   "User-Agent": "DiscordBot (vercel-fn,1.0)",
 };
 
-async function deferPublicInteraction(body) {
+async function deferInteraction(body, { ephemeral = false } = {}) {
+  const payload = {
+    type: 5,
+    ...(ephemeral ? { data: { flags: 64 } } : {}),
+  };
   const r = await fetch(`${DISCORD_API}/interactions/${body.id}/${body.token}/callback`, {
     method: "POST",
     headers: DISCORD_HEADERS,
-    body: JSON.stringify({ type: 5 }),
+    body: JSON.stringify(payload),
   });
 
   if (!r.ok) {
     const txt = await r.text().catch(() => "");
-    console.error("deferPublicInteraction failed:", r.status, txt);
+    console.error("deferInteraction failed:", r.status, txt);
   }
 }
 
@@ -112,6 +116,70 @@ async function editOriginal(body, payload) {
     const txt = await r.text().catch(() => "");
     console.error("editOriginal failed:", r.status, txt);
   }
+}
+
+async function deleteOriginal(body) {
+  const appId = body.application_id;
+  const r = await fetch(`${DISCORD_API}/webhooks/${appId}/${body.token}/messages/@original`, {
+    method: "DELETE",
+    headers: DISCORD_HEADERS,
+  });
+
+  if (!r.ok && r.status !== 404) {
+    const txt = await r.text().catch(() => "");
+    throw new Error(`deleteOriginal failed (${r.status}): ${txt}`);
+  }
+}
+
+async function createPublicFollowup(body, content) {
+  const appId = body.application_id;
+  const r = await fetch(`${DISCORD_API}/webhooks/${appId}/${body.token}`, {
+    method: "POST",
+    headers: DISCORD_HEADERS,
+    body: JSON.stringify({ content: String(content || "").slice(0, 2000) }),
+  });
+
+  if (!r.ok) {
+    const txt = await r.text().catch(() => "");
+    throw new Error(`createPublicFollowup failed (${r.status}): ${txt}`);
+  }
+}
+
+async function finalizeMessageCommandReply(body, content) {
+  await editOriginal(body, { content: "||\n||" });
+  try {
+    await deleteOriginal(body);
+  } catch (error) {
+    console.error("Failed to delete private Fritz thinking response:", error);
+  }
+  await createPublicFollowup(body, content);
+}
+
+function getTargetMessageText(body) {
+  const targetId = body?.data?.target_id;
+  const message = targetId ? body?.data?.resolved?.messages?.[targetId] : null;
+  if (!message) return "";
+
+  const parts = [];
+  if (typeof message.content === "string" && message.content.trim()) {
+    parts.push(message.content.trim());
+  }
+
+  const embeds = Array.isArray(message.embeds) ? message.embeds : [];
+  for (const embed of embeds) {
+    for (const value of [embed?.title, embed?.description, embed?.author?.name]) {
+      if (typeof value === "string" && value.trim()) parts.push(value.trim());
+    }
+    for (const field of Array.isArray(embed?.fields) ? embed.fields : []) {
+      if (typeof field?.name === "string" && field.name.trim()) parts.push(field.name.trim());
+      if (typeof field?.value === "string" && field.value.trim()) parts.push(field.value.trim());
+    }
+    if (typeof embed?.footer?.text === "string" && embed.footer.text.trim()) {
+      parts.push(embed.footer.text.trim());
+    }
+  }
+
+  return parts.join("\n");
 }
 
 /* ========== OUTPUT SHAPING ========== */
@@ -338,9 +406,42 @@ export default async function handler(req, res) {
       return sendJson(res, { type: 1 });
     }
 
-    // /ask
-    if (body?.type === 2 && body?.data?.name === "ask") {
-      await deferPublicInteraction(body);
+    // Apps -> Fritz
+    if (
+      body?.type === 2 &&
+      body?.data?.type === 3 &&
+      body?.data?.name === "Fritz"
+    ) {
+      await deferInteraction(body, { ephemeral: true });
+
+      const prompt = getTargetMessageText(body);
+      if (!prompt) {
+        await editOriginal(body, { content: "אחי אין בהודעה הזאת טקסט 💀" });
+        res.statusCode = 200;
+        return res.end("");
+      }
+
+      let answer = "";
+      if (!OPENAI_API_KEY) {
+        answer = "אחי חסר OPENAI_API_KEY.";
+      } else {
+        answer = await askOpenAI(prompt);
+      }
+
+      answer = compactAnswer(sanitize(answer));
+      await finalizeMessageCommandReply(body, answer);
+
+      res.statusCode = 200;
+      return res.end("");
+    }
+
+    // /fritz
+    if (
+      body?.type === 2 &&
+      body?.data?.type !== 3 &&
+      (body?.data?.name === "fritz" || body?.data?.name === "ask")
+    ) {
+      await deferInteraction(body);
 
       const prompt = (body.data.options || []).find((o) => o.name === "text")?.value || "";
 
@@ -367,7 +468,7 @@ export default async function handler(req, res) {
       return sendJson(res, { type: 4, data: { content } });
     }
 
-    return sendJson(res, { type: 4, data: { content: "אחי מה אתה רוצה? תן /ask משהו ברור." } });
+    return sendJson(res, { type: 4, data: { content: "אחי מה אתה רוצה? תן /fritz משהו ברור." } });
   } catch (e) {
     console.error("DISCORD_FN_ERR", e && (e.stack || e.message || e));
     return sendJson(res, { type: 4, data: { content: "אחי קרסתי, נסה שוב." } });
