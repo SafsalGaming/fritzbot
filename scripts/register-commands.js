@@ -14,12 +14,18 @@ const CSEC = process.env.DISCORD_CLIENT_SECRET;  // חלופה 2
 
 const commands = [
   {
-    name: "ask",
+    name: "fritz",
     type: 1,
     integration_types: [1, 0], // User + Guild installs
     description: "שאל את פריץ את שעל ליבך",
     contexts: [2, 0], // DM + Guild
     options: [{ name: "text", description: "שאלה", type: 3, required: true }],
+  },
+  {
+    name: "Fritz",
+    type: 3,
+    integration_types: [1, 0],
+    contexts: [0, 1, 2],
   },
   {
     name: "fritz-mode",
