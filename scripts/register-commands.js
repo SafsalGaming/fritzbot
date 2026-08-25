@@ -112,7 +112,7 @@ async function getAuthHeader() {
   throw new Error("Set DISCORD_BOT_TOKEN or DISCORD_CLIENT_ID + DISCORD_CLIENT_SECRET");
 }
 
-async function put(url, auth) {
+async function put(url, auth, commandPayload = commands) {
   const r = await fetch(url, {
     method: "PUT",
     headers: {
@@ -120,7 +120,7 @@ async function put(url, auth) {
       "Content-Type": "application/json",
       "User-Agent": "fritzbot(register-commands,1.0)",
     },
-    body: JSON.stringify(commands),
+    body: JSON.stringify(commandPayload),
   });
 
   const j = await r.json().catch(() => ({}));
@@ -156,7 +156,8 @@ async function get(url, auth) {
 
   if (GUILD_ID) {
     const gUrl = `https://discord.com/api/v10/applications/${APP_ID}/guilds/${GUILD_ID}/commands`;
-    const gPut = await put(gUrl, auth);
+    const guildCommands = commands.map(({ integration_types, contexts, ...command }) => command);
+    const gPut = await put(gUrl, auth, guildCommands);
     const gGet = await get(gUrl, auth);
     console.log("GUILD OK:", gPut.map(c => c.name), "NOW:", gGet.map(c => c.name));
   }
