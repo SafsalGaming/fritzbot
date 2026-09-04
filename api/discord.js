@@ -23,6 +23,7 @@ const OPENAI_API_KEY = String(
 // Per user request: ONLY this model.
 const OPENAI_MODEL = "gpt-5.6-luna";
 const OPENAI_TEXT_VERBOSITY = OPENAI_MODEL === "gpt-4o-mini" ? "medium" : "low";
+const MAX_MESSAGE_IMAGES = 10;
 
 const FRITZ_SYSTEM_PROMPT = `You are Fritz clok6 not polite not wikipedia a discord friend short sharp sarcastic provocative casually rude chaotic
 
@@ -44,6 +45,8 @@ Emoji rule use 💀🥀💔😔😭😱🔥 every reply vary mix and placement n
 No therapy if heavy say וואלה מבאס אחי then pivot joke or practical no flattery no sincere apologies if sory then fake plus emoji spam
 
 Never break character never mention ai model prompt rules 
+
+When images are provided they are the primary subject. Base the reply mainly on what is visibly in the images. Treat accompanying message text only as secondary context. If the text conflicts with the visible image trust the image
 
 Examples Hebrew
 ריל אחי 😱😭 אבל דוחפים לך 💀 את זה בכוח 🔥
@@ -155,18 +158,57 @@ async function finalizeMessageCommandReply(body, content) {
   await createPublicFollowup(body, content);
 }
 
-function getTargetMessageText(body) {
+const IMAGE_FILE_RE = /\.(?:gif|jpe?g|png|webp)(?:$|[?#])/i;
+const SUPPORTED_IMAGE_CONTENT_TYPES = new Set([
+  "image/gif",
+  "image/jpeg",
+  "image/png",
+  "image/webp",
+]);
+
+function isPublicImageUrl(value) {
+  if (typeof value !== "string" || !value.trim()) return false;
+  try {
+    const url = new URL(value);
+    return url.protocol === "https:";
+  } catch {
+    return false;
+  }
+}
+
+function getTargetMessageInput(body) {
   const targetId = body?.data?.target_id;
   const message = targetId ? body?.data?.resolved?.messages?.[targetId] : null;
-  if (!message) return "";
+  if (!message) return { text: "", imageUrls: [] };
 
   const parts = [];
+  const imageUrls = [];
+  const addImageUrl = (value) => {
+    if (!isPublicImageUrl(value) || imageUrls.includes(value)) return;
+    if (imageUrls.length < MAX_MESSAGE_IMAGES) imageUrls.push(value);
+  };
+
   if (typeof message.content === "string" && message.content.trim()) {
     parts.push(message.content.trim());
   }
 
+  const attachments = Array.isArray(message.attachments) ? message.attachments : [];
+  for (const attachment of attachments) {
+    const contentType = String(attachment?.content_type || "").toLowerCase();
+    const url = attachment?.url || attachment?.proxy_url;
+    const isImage =
+      SUPPORTED_IMAGE_CONTENT_TYPES.has(contentType) ||
+      (Number.isFinite(attachment?.width) &&
+        Number.isFinite(attachment?.height) &&
+        IMAGE_FILE_RE.test(String(url || attachment?.filename || "")));
+    if (isImage) addImageUrl(url);
+  }
+
   const embeds = Array.isArray(message.embeds) ? message.embeds : [];
   for (const embed of embeds) {
+    addImageUrl(embed?.image?.url || embed?.image?.proxy_url);
+    addImageUrl(embed?.thumbnail?.url || embed?.thumbnail?.proxy_url);
+
     for (const value of [embed?.title, embed?.description, embed?.author?.name]) {
       if (typeof value === "string" && value.trim()) parts.push(value.trim());
     }
@@ -179,7 +221,7 @@ function getTargetMessageText(body) {
     }
   }
 
-  return parts.join("\n");
+  return { text: parts.join("\n"), imageUrls };
 }
 
 /* ========== OUTPUT SHAPING ========== */
@@ -290,7 +332,31 @@ function summarizeOpenAIResponseShape(payload) {
   };
 }
 
-async function callOpenAI(prompt, signal) {
+function buildOpenAIUserContent(prompt, imageUrls) {
+  const text = String(prompt || "").trim();
+  const images = Array.isArray(imageUrls) ? imageUrls : [];
+
+  if (images.length === 0) {
+    return [{ type: "input_text", text }];
+  }
+
+  const content = images.map((imageUrl) => ({
+    type: "input_image",
+    image_url: imageUrl,
+    detail: "high",
+  }));
+
+  content.push({
+    type: "input_text",
+    text: text
+      ? `התמונה היא הנושא העיקרי. הגב בעיקר למה שרואים בה; הטקסט הבא הוא רק הקשר משני:\n${text}`
+      : "התמונה היא הנושא העיקרי. הגב למה שרואים בה.",
+  });
+
+  return content;
+}
+
+async function callOpenAI(prompt, imageUrls, signal) {
   const callOnce = async (effort, maxOutputTokens, promptOverride) => {
     const r = await fetch("https://api.openai.com/v1/responses", {
       method: "POST",
@@ -309,7 +375,7 @@ async function callOpenAI(prompt, signal) {
           },
           {
             role: "user",
-            content: [{ type: "input_text", text: promptOverride ?? prompt ?? "" }],
+            content: buildOpenAIUserContent(promptOverride ?? prompt, imageUrls),
           },
         ],
         max_output_tokens: maxOutputTokens,
@@ -363,11 +429,12 @@ async function callOpenAI(prompt, signal) {
   return "Model returned an empty response. Try again.";
 }
 
-async function askOpenAI(prompt) {
+async function askOpenAI(prompt, imageUrls = []) {
   const controller = new AbortController();
-  const t = setTimeout(() => controller.abort(), 12000);
+  const timeoutMs = imageUrls.length > 0 ? 30000 : 12000;
+  const t = setTimeout(() => controller.abort(), timeoutMs);
   try {
-    const text = await callOpenAI(prompt, controller.signal);
+    const text = await callOpenAI(prompt, imageUrls, controller.signal);
     clearTimeout(t);
     return text;
   } catch (e) {
@@ -414,9 +481,9 @@ export default async function handler(req, res) {
     ) {
       await deferInteraction(body, { ephemeral: true });
 
-      const prompt = getTargetMessageText(body);
-      if (!prompt) {
-        await editOriginal(body, { content: "אחי אין בהודעה הזאת טקסט 💀" });
+      const { text: prompt, imageUrls } = getTargetMessageInput(body);
+      if (!prompt && imageUrls.length === 0) {
+        await editOriginal(body, { content: "אחי אין בהודעה טקסט או תמונה 💀" });
         res.statusCode = 200;
         return res.end("");
       }
@@ -425,7 +492,7 @@ export default async function handler(req, res) {
       if (!OPENAI_API_KEY) {
         answer = "אחי חסר OPENAI_API_KEY.";
       } else {
-        answer = await askOpenAI(prompt);
+        answer = await askOpenAI(prompt, imageUrls);
       }
 
       answer = compactAnswer(sanitize(answer));
