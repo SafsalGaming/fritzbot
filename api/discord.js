@@ -1,3 +1,5 @@
+import botmeter from '../lib/botmeter.cjs';
+const { monitoredFetch: fetch, withTelemetry, setCommand } = botmeter;
 ﻿// api/discord.js
 // Discord Interactions (Vercel) + OpenAI Responses API
 // Node 20+ (global fetch)
@@ -445,7 +447,7 @@ async function askOpenAI(prompt, imageUrls = []) {
 }
 
 /* ========== HANDLER ========== */
-export default async function handler(req, res) {
+async function handler(req, res) {
   try {
     console.log("DISCORD_REQ", req.method, req.url);
 
@@ -467,6 +469,7 @@ export default async function handler(req, res) {
     if (!verified) return sendText(res, 401, "Bad request signature");
 
     const body = JSON.parse(rawBuf.toString("utf8"));
+    setCommand(body.data?.name);
 
     // PING
     if (body?.type === 1) {
@@ -541,3 +544,5 @@ export default async function handler(req, res) {
     return sendJson(res, { type: 4, data: { content: "אחי קרסתי, נסה שוב." } });
   }
 }
+
+export default withTelemetry(handler);
