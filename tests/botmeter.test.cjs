@@ -47,3 +47,21 @@ test('non-provider traffic and unconfigured monitoring are passthrough',async()=
  let calls=0;const h=helper(async()=>{calls++;return Response.json({});},{BOTMETER_URL:''});await h.monitoredFetch(provider,options);assert.equal(calls,1);
  const other=helper(async()=>{calls++;return Response.json({});});await other.monitoredFetch('https://discord.com/api',{});assert.equal(calls,2);
 });
+
+test('final Discord text and image URLs attach to provider event without changing raw output',async()=>{
+ const reports=[];const h=helper(async(url,opts)=>{
+  if(String(url).startsWith(provider))return Response.json({...payload,output_text:'{"winner":1}'});
+  if(String(url).startsWith('https://discord.com/')){assert.equal(new URL(url).searchParams.get('wait'),'true');return Response.json({content:'Actual bot reply',attachments:[{content_type:'image/png',url:'https://cdn.discordapp.com/attachments/123/result.png'}]});}
+  reports.push({path:new URL(url).pathname,event:JSON.parse(opts.body)});return Response.json({ok:true});
+ });
+ await h.withTelemetry(async()=>{h.setCommand('/image');await h.monitoredFetch(provider,options);await h.monitoredFetch('https://discord.com/api/v10/webhooks/app/token',{method:'POST',body:JSON.stringify({content:'Actual bot reply'})});})();
+ assert.equal(reports.length,2);assert.equal(reports[0].event.output,'{"winner":1}');assert.equal(reports[1].path,'/api/result');assert.equal(reports[1].event.ids[0],reports[0].event.id);assert.equal(reports[1].event.output,'Actual bot reply');assert.equal(reports[1].event.imageUrls.length,1);
+});
+test('failed Discord sends never claim a delivered result',async()=>{
+ const reports=[];const h=helper(async(url,opts)=>{
+  if(String(url).startsWith(provider))return Response.json(payload);
+  if(String(url).startsWith('https://discord.com/'))return Response.json({}, {status:500});
+  reports.push(JSON.parse(opts.body));return Response.json({});
+ });
+ await h.withTelemetry(async()=>{await h.monitoredFetch(provider,options);await h.monitoredFetch('https://discord.com/api/v10/webhooks/app/token',{method:'POST',body:'{"content":"not delivered"}'});})();assert.equal(reports.length,1);
+});
