@@ -65,3 +65,17 @@ test('failed Discord sends never claim a delivered result',async()=>{
  });
  await h.withTelemetry(async()=>{await h.monitoredFetch(provider,options);await h.monitoredFetch('https://discord.com/api/v10/webhooks/app/token',{method:'POST',body:'{"content":"not delivered"}'});})();assert.equal(reports.length,1);
 });
+
+test('Responses format config never hides the actual output text',()=>{
+ const h=helper(async()=>{});
+ const data={text:{format:{type:'text'},verbosity:'medium'},output:[{content:[{type:'output_text',text:'The actual reply'}]}]};
+ assert.equal(h.eventFor(provider,{},data,Date.now(),'id',null).output,'The actual reply');
+});
+test('candidate selection reports the chosen sentence, not only its index',()=>{
+ const h=helper(async()=>{});
+ const request={text:{format:{name:'shae_candidate_selection'}},input:[{content:[{type:'input_text',text:'Question: example\nNumbered candidates:\n0: First sentence\n1: Chosen sentence\n2: Last sentence'}]}]};
+ const data={text:{format:{type:'json_schema'}},output:[{content:[{text:'{"winner":1}'}]}]};
+ const result=JSON.parse(h.eventFor(provider,request,data,Date.now(),'id',null).output);
+ assert.equal(result.selected_line,'Chosen sentence');
+ assert.equal(result.candidate_index,1);
+});
